@@ -54,6 +54,16 @@
         "command": "markdownDiffPreview.refresh",
         "title": "Refresh Markdown Diff Preview",
         "icon": "$(refresh)"
+      },
+      {
+        "command": "markdownDiffPreview.nextDiff",
+        "title": "Markdown Diff Preview: Go to Next Diff",
+        "icon": "$(arrow-down)"
+      },
+      {
+        "command": "markdownDiffPreview.previousDiff",
+        "title": "Markdown Diff Preview: Go to Previous Diff",
+        "icon": "$(arrow-up)"
       }
     ],
     "menus": {
@@ -68,6 +78,12 @@
         {
           "command": "markdownDiffPreview.open",
           "when": "resourceLangId == markdown"
+        },
+        {
+          "command": "markdownDiffPreview.nextDiff"
+        },
+        {
+          "command": "markdownDiffPreview.previousDiff"
         }
       ]
     },
@@ -77,6 +93,18 @@
         "key": "ctrl+shift+v",
         "mac": "cmd+shift+v",
         "when": "resourceLangId == markdown"
+      },
+      {
+        "command": "markdownDiffPreview.nextDiff",
+        "key": "alt+down",
+        "mac": "alt+down",
+        "when": "activeCustomEditorId == 'markdownDiffPreview' || activeWebviewPanelId == 'markdownDiffPreview'"
+      },
+      {
+        "command": "markdownDiffPreview.previousDiff",
+        "key": "alt+up",
+        "mac": "alt+up",
+        "when": "activeCustomEditorId == 'markdownDiffPreview' || activeWebviewPanelId == 'markdownDiffPreview'"
       }
     ],
     "configuration": {
@@ -110,6 +138,7 @@
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
     "lint": "eslint src --ext ts",
+    "test": "node -r ts-node/register --test test/*.test.ts",
     "demo": "npx ts-node scripts/generate-demo.ts",
     "demo:serve": "npx ts-node scripts/generate-demo.ts && npx serve . -l 3000 --no-clipboard",
     "publish": "ovsx publish --pat $OVSX_PAT"

@@ -366,7 +366,7 @@ export async function renderMarkdownWithDiff(
         return '';
     };
 
-    const renderRemovedBlock = (removedContent: string): string => {
+    const renderRemovedBlock = (removedContent: string, lineNumber?: number): string => {
         const removedLinesArr = removedContent.split('\n');
         let renderedRemoved = '';
         let inRemovedList = false;
@@ -408,13 +408,15 @@ export async function renderMarkdownWithDiff(
 
         flushRemovedList();
 
-        return `<div class="diff-removed-block"><span class="diff-removed-label">removed</span>${renderedRemoved}</div>`;
+        const dataLineAttr = lineNumber ? ` data-line="${lineNumber}"` : '';
+        return `<div class="diff-removed-block"${dataLineAttr}><span class="diff-removed-label">removed</span>${renderedRemoved}</div>`;
     };
 
     // Render removed list items inline within a list (not as a full-width block)
-    const renderRemovedListItems = (removedContent: string, parentTag: 'ul' | 'ol'): string => {
+    const renderRemovedListItems = (removedContent: string, parentTag: 'ul' | 'ol', lineNumber?: number): string => {
         const removedLinesArr = removedContent.split('\n');
         let result = '';
+        const dataLineAttr = lineNumber ? ` data-line="${lineNumber}"` : '';
 
         removedLinesArr.forEach(line => {
             const trimmed = line.trim();
@@ -425,10 +427,10 @@ export async function renderMarkdownWithDiff(
 
             if (ulMatch || olMatch) {
                 const itemText = parseInline((ulMatch || olMatch)![1]);
-                result += `<li class="diff-line removed">${itemText}</li>`;
+                result += `<li class="diff-line removed"${dataLineAttr}>${itemText}</li>`;
             } else {
                 // Non-list content in removed section - render as a removed list item
-                result += `<li class="diff-line removed">${parseInline(trimmed)}</li>`;
+                result += `<li class="diff-line removed"${dataLineAttr}>${parseInline(trimmed)}</li>`;
             }
         });
 
@@ -443,7 +445,7 @@ export async function renderMarkdownWithDiff(
         
         // Show removed content before this line if any
         if (removedContent) {
-            wrapped += renderRemovedBlock(removedContent);
+            wrapped += renderRemovedBlock(removedContent, lineNumber);
         }
         
         // Apply comment wrapping first
@@ -502,7 +504,7 @@ export async function renderMarkdownWithDiff(
                         
                         // Render removed list items inline (not as a separate block)
                         if (removedContent) {
-                            listHtml += renderRemovedListItems(removedContent, tag);
+                            listHtml += renderRemovedListItems(removedContent, tag, lineNum);
                         }
 
                         const isAdded = addedLines.has(lineNum);
@@ -781,7 +783,7 @@ export async function renderMarkdownWithDiff(
             // Check for removed content here
             const removedContent = removedLines.get(lineNumber);
             if (removedContent) {
-                html += renderRemovedBlock(removedContent);
+                html += renderRemovedBlock(removedContent, lineNumber);
             }
             continue;
         }
@@ -906,7 +908,7 @@ export async function renderMarkdownWithDiff(
     // Check for any removed content at the very end
     const lastLineRemoved = removedLines.get(lines.length + 1);
     if (lastLineRemoved) {
-        html += renderRemovedBlock(lastLineRemoved);
+        html += renderRemovedBlock(lastLineRemoved, lines.length + 1);
     }
 
     // Append all comment threads at the end

@@ -25,6 +25,21 @@ export function activate(context: vscode.ExtensionContext) {
         }
     );
 
+    // Register diff navigation commands
+    const nextDiffCommand = vscode.commands.registerCommand(
+        'markdownDiffPreview.nextDiff',
+        () => {
+            MarkdownDiffPreviewPanel.navigateDiff('next');
+        }
+    );
+
+    const prevDiffCommand = vscode.commands.registerCommand(
+        'markdownDiffPreview.previousDiff',
+        () => {
+            MarkdownDiffPreviewPanel.navigateDiff('prev');
+        }
+    );
+
     // Auto-update preview when document changes
     const onDocumentChange = vscode.workspace.onDidChangeTextDocument((e) => {
         if (e.document.languageId === 'markdown') {
@@ -48,6 +63,8 @@ export function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(
         openPreviewCommand,
         refreshCommand,
+        nextDiffCommand,
+        prevDiffCommand,
         onDocumentChange,
         onActiveEditorChange,
         gitWatcher
