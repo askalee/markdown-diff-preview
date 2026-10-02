@@ -6,7 +6,23 @@
             "type": "extensionHost",
             "request": "launch",
             "args": [
-                "--extensionDevelopmentPath=${workspaceFolder}"
+                "--extensionDevelopmentPath=${workspaceFolder}",
+                "--disable-extensions",
+                "${workspaceFolder}/demo/diagrams_demo.md"
+            ],
+            "outFiles": [
+                "${workspaceFolder}/out/**/*.js"
+            ],
+            "preLaunchTask": "npm: compile"
+        },
+        {
+            "name": "Run Extension (Watch)",
+            "type": "extensionHost",
+            "request": "launch",
+            "args": [
+                "--extensionDevelopmentPath=${workspaceFolder}",
+                "--disable-extensions",
+                "${workspaceFolder}/demo/diagrams_demo.md"
             ],
             "outFiles": [
                 "${workspaceFolder}/out/**/*.js"
@@ -18,7 +34,9 @@
             "type": "extensionHost",
             "request": "launch",
             "args": [
-                "--extensionDevelopmentPath=${workspaceFolder}"
+                "--extensionDevelopmentPath=${workspaceFolder}",
+                "--disable-extensions",
+                "${workspaceFolder}/demo/diagrams_demo.md"
             ],
             "outFiles": [
                 "${workspaceFolder}/out/**/*.js"

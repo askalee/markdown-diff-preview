@@ -21,6 +21,7 @@ function generateHtml(content: string, fileName: string, addedCount: number, rem
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Markdown Diff Preview - ${fileName}</title>
     <link rel="stylesheet" href="../media/styles.css">
+    <script src="../media/mermaid.min.js"></script>
 </head>
 <body>
     <button class="theme-toggle" onclick="toggleTheme()">Toggle Theme</button>
@@ -46,6 +47,9 @@ function generateHtml(content: string, fileName: string, addedCount: number, rem
                     Next <span class="nav-arrow">▼</span>
                 </button>
             </div>
+            <button class="diagrams-view-btn" id="diagrams-header-btn" onclick="openDiagramsModal(0)" title="View all diagrams in tabs" style="display:none;">
+                📊 Diagrams (<span id="diagrams-header-count">0</span>)
+            </button>
             <button class="refresh-btn" onclick="location.reload()">↻ Refresh</button>
         </div>
     </div>
@@ -54,10 +58,306 @@ function generateHtml(content: string, fileName: string, addedCount: number, rem
         ${content}
     </div>
 
+    <!-- Diagrams Tabbed View Modal -->
+    <div id="diagrams-modal" class="diagrams-modal" style="display: none;" role="dialog" aria-modal="true" aria-label="Mermaid Diagrams View">
+        <div class="diagrams-modal-backdrop" onclick="closeDiagramsModal()"></div>
+        <div class="diagrams-modal-window">
+            <div class="diagrams-modal-header">
+                <div class="diagrams-tab-bar" id="diagrams-tab-bar" role="tablist">
+                    <!-- Dynamic tabs will be inserted here -->
+                </div>
+                <div class="diagrams-modal-actions">
+                    <button class="diagrams-ctrl-btn" onclick="zoomCurrentDiagram(-0.15)" title="Zoom Out (−)" aria-label="Zoom Out">
+                        <span class="ctrl-icon">−</span>
+                    </button>
+                    <button class="diagrams-ctrl-btn" id="diagrams-zoom-level" onclick="resetCurrentDiagramZoom()" title="Reset Zoom (100%)" aria-label="Reset Zoom">
+                        100%
+                    </button>
+                    <button class="diagrams-ctrl-btn" onclick="zoomCurrentDiagram(0.15)" title="Zoom In (+)" aria-label="Zoom In">
+                        <span class="ctrl-icon">+</span>
+                    </button>
+                    <button class="diagrams-ctrl-btn" onclick="copyCurrentDiagramSvg()" title="Copy Diagram SVG to Clipboard" aria-label="Copy SVG">
+                        Copy SVG
+                    </button>
+                    <button class="diagrams-ctrl-btn" onclick="jumpToCurrentDiagramLine()" title="Jump to Diagram in Editor" aria-label="Jump to line">
+                        ⎘ Jump to line
+                    </button>
+                    <button class="diagrams-close-btn" onclick="closeDiagramsModal()" title="Close (Esc)" aria-label="Close">
+                        ✕
+                    </button>
+                </div>
+            </div>
+            <div class="diagrams-modal-body" id="diagrams-modal-body">
+                <div class="diagrams-stage" id="diagrams-stage">
+                    <div class="diagrams-viewport" id="diagrams-viewport">
+                        <!-- Current diagram SVG displayed here -->
+                    </div>
+                </div>
+            </div>
+            <div class="diagrams-modal-footer">
+                <button class="diagrams-nav-btn" id="diagrams-prev-btn" onclick="navigateDiagram('prev')" title="Previous Diagram (Left Arrow)">
+                    ← Previous
+                </button>
+                <span class="diagrams-footer-info" id="diagrams-footer-info">Diagram 1 of 1</span>
+                <button class="diagrams-nav-btn" id="diagrams-next-btn" onclick="navigateDiagram('next')" title="Next Diagram (Right Arrow)">
+                    Next →
+                </button>
+            </div>
+        </div>
+    </div>
+
     <script>
         function toggleTheme() {
             document.body.classList.toggle('theme-light');
+            if (window.mermaid) {
+                initMermaid();
+            }
         }
+
+        // ==========================================
+        // Mermaid Rendering & Tabbed View System
+        // ==========================================
+        let diagramsList = [];
+        let currentDiagramIndex = 0;
+        let currentDiagramZoom = 1.0;
+        let isDiagramsModalOpen = false;
+
+        function toggleMermaidSource(btn) {
+            const container = btn.closest('.mermaid-container');
+            if (!container) return;
+            const diagramWrap = container.querySelector('.mermaid-diagram-wrap');
+            const sourceWrap = container.querySelector('.mermaid-source-wrapper');
+            if (!diagramWrap || !sourceWrap) return;
+
+            const isSourceVisible = sourceWrap.style.display !== 'none';
+            if (isSourceVisible) {
+                sourceWrap.style.display = 'none';
+                diagramWrap.style.display = '';
+                btn.classList.remove('active');
+            } else {
+                sourceWrap.style.display = '';
+                diagramWrap.style.display = 'none';
+                btn.classList.add('active');
+            }
+        }
+
+        async function initMermaid() {
+            const containers = Array.from(document.querySelectorAll('.mermaid-container'));
+            if (containers.length === 0) {
+                const headerBtn = document.getElementById('diagrams-header-btn');
+                if (headerBtn) headerBtn.style.display = 'none';
+                return;
+            }
+
+            let mermaidTheme = 'dark';
+            if (document.body.classList.contains('theme-light')) {
+                mermaidTheme = 'default';
+            }
+
+            if (window.mermaid) {
+                try {
+                    mermaid.initialize({
+                        startOnLoad: false,
+                        theme: mermaidTheme,
+                        securityLevel: 'loose',
+                        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+                    });
+                } catch (e) {
+                    console.error('Failed to initialize mermaid:', e);
+                }
+            }
+
+            diagramsList = [];
+
+            for (let i = 0; i < containers.length; i++) {
+                const container = containers[i];
+                const index = parseInt(container.dataset.diagramIndex || String(i), 10);
+                const title = container.dataset.diagramTitle || ('Diagram ' + (index + 1));
+                const line = parseInt(container.dataset.line || '0', 10);
+                const rawEl = container.querySelector('.mermaid-raw');
+                const renderedEl = container.querySelector('.mermaid-rendered');
+                const rawCode = rawEl ? (rawEl.textContent || '').trim() : '';
+
+                let svgHtml = '';
+                if (window.mermaid && rawCode) {
+                    try {
+                        const renderId = 'mermaid-demo-svg-' + index + '-' + Math.floor(Math.random() * 10000);
+                        const renderRes = await mermaid.render(renderId, rawCode);
+                        svgHtml = renderRes.svg;
+                        if (renderedEl) {
+                            renderedEl.innerHTML = svgHtml;
+                        }
+                    } catch (err) {
+                        console.error('Mermaid render error for diagram ' + index + ':', err);
+                        if (renderedEl) {
+                            renderedEl.innerHTML = '<div class="mermaid-error">' +
+                                '<div class="mermaid-error-title">⚠️ Mermaid Syntax Error</div>' +
+                                '<div class="mermaid-error-msg">' + (err.message || String(err)) + '</div>' +
+                            '</div>';
+                        }
+                    }
+                }
+
+                diagramsList.push({
+                    index: index,
+                    title: title,
+                    line: line,
+                    rawCode: rawCode,
+                    svgHtml: svgHtml,
+                    container: container
+                });
+            }
+
+            const headerBtn = document.getElementById('diagrams-header-btn');
+            const headerCount = document.getElementById('diagrams-header-count');
+            if (headerBtn && headerCount) {
+                headerCount.textContent = String(diagramsList.length);
+                headerBtn.style.display = 'inline-flex';
+            }
+
+            renderDiagramsTabs();
+        }
+
+        function renderDiagramsTabs() {
+            const tabBar = document.getElementById('diagrams-tab-bar');
+            if (!tabBar) return;
+            tabBar.innerHTML = '';
+
+            diagramsList.forEach((d, idx) => {
+                const tab = document.createElement('button');
+                tab.className = 'diagrams-tab' + (idx === currentDiagramIndex ? ' active' : '');
+                tab.setAttribute('role', 'tab');
+                tab.setAttribute('aria-selected', idx === currentDiagramIndex ? 'true' : 'false');
+                tab.dataset.tabIndex = String(idx);
+                tab.title = d.title;
+                tab.innerHTML = '<span class="tab-number">' + (idx + 1) + '.</span> <span class="tab-title">' + d.title + '</span>';
+                tab.onclick = () => selectDiagramTab(idx);
+                tabBar.appendChild(tab);
+            });
+        }
+
+        function selectDiagramTab(index) {
+            if (index < 0 || index >= diagramsList.length) return;
+            currentDiagramIndex = index;
+            const diagram = diagramsList[index];
+
+            document.querySelectorAll('.diagrams-tab').forEach((tab, idx) => {
+                const isActive = idx === index;
+                tab.classList.toggle('active', isActive);
+                tab.setAttribute('aria-selected', isActive ? 'true' : 'false');
+                if (isActive) {
+                    tab.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
+                }
+            });
+
+            const viewport = document.getElementById('diagrams-viewport');
+            if (viewport) {
+                if (diagram.svgHtml) {
+                    viewport.innerHTML = diagram.svgHtml;
+                } else {
+                    const inlineRendered = diagram.container?.querySelector('.mermaid-rendered');
+                    viewport.innerHTML = inlineRendered ? inlineRendered.innerHTML : '<div class="empty-state">No preview available</div>';
+                }
+            }
+
+            resetCurrentDiagramZoom();
+
+            const footerInfo = document.getElementById('diagrams-footer-info');
+            if (footerInfo) {
+                footerInfo.textContent = 'Diagram ' + (index + 1) + ' of ' + diagramsList.length + ' — ' + diagram.title;
+            }
+
+            const prevBtn = document.getElementById('diagrams-prev-btn');
+            const nextBtn = document.getElementById('diagrams-next-btn');
+            if (prevBtn) prevBtn.disabled = diagramsList.length <= 1;
+            if (nextBtn) nextBtn.disabled = diagramsList.length <= 1;
+        }
+
+        function openDiagramsModal(index = 0) {
+            if (diagramsList.length === 0) return;
+            const modal = document.getElementById('diagrams-modal');
+            if (!modal) return;
+            modal.style.display = 'flex';
+            isDiagramsModalOpen = true;
+            selectDiagramTab(Math.max(0, Math.min(index, diagramsList.length - 1)));
+        }
+
+        function closeDiagramsModal() {
+            const modal = document.getElementById('diagrams-modal');
+            if (!modal) return;
+            modal.style.display = 'none';
+            isDiagramsModalOpen = false;
+        }
+
+        function openDiagramInTab(index) {
+            openDiagramsModal(index);
+        }
+
+        function zoomCurrentDiagram(delta) {
+            currentDiagramZoom = Math.max(0.2, Math.min(3.0, currentDiagramZoom + delta));
+            applyDiagramZoom();
+        }
+
+        function resetCurrentDiagramZoom() {
+            currentDiagramZoom = 1.0;
+            applyDiagramZoom();
+        }
+
+        function applyDiagramZoom() {
+            const viewport = document.getElementById('diagrams-viewport');
+            const zoomLevelEl = document.getElementById('diagrams-zoom-level');
+            if (viewport) {
+                viewport.style.transform = 'scale(' + currentDiagramZoom + ')';
+            }
+            if (zoomLevelEl) {
+                zoomLevelEl.textContent = Math.round(currentDiagramZoom * 100) + '%';
+            }
+        }
+
+        function navigateDiagram(dir) {
+            if (diagramsList.length === 0) return;
+            let nextIndex = currentDiagramIndex;
+            if (dir === 'next') {
+                nextIndex = (currentDiagramIndex + 1) % diagramsList.length;
+            } else {
+                nextIndex = (currentDiagramIndex - 1 + diagramsList.length) % diagramsList.length;
+            }
+            selectDiagramTab(nextIndex);
+        }
+
+        function jumpToCurrentDiagramLine() {
+            const diagram = diagramsList[currentDiagramIndex];
+            if (!diagram || !diagram.line) return;
+            closeDiagramsModal();
+            const target = document.querySelector('.content [data-line="' + diagram.line + '"]');
+            if (target) {
+                target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        }
+
+        async function copyCurrentDiagramSvg() {
+            const diagram = diagramsList[currentDiagramIndex];
+            if (!diagram || !diagram.svgHtml) {
+                alert('No SVG available to copy');
+                return;
+            }
+            try {
+                await navigator.clipboard.writeText(diagram.svgHtml);
+                alert('SVG copied to clipboard!');
+            } catch (err) {
+                alert('Failed to copy SVG: ' + err.message);
+            }
+        }
+
+        window.openDiagramsModal = openDiagramsModal;
+        window.closeDiagramsModal = closeDiagramsModal;
+        window.openDiagramInTab = openDiagramInTab;
+        window.toggleMermaidSource = toggleMermaidSource;
+        window.zoomCurrentDiagram = zoomCurrentDiagram;
+        window.resetCurrentDiagramZoom = resetCurrentDiagramZoom;
+        window.navigateDiagram = navigateDiagram;
+        window.jumpToCurrentDiagramLine = jumpToCurrentDiagramLine;
+        window.copyCurrentDiagramSvg = copyCurrentDiagramSvg;
 
         document.querySelectorAll('[data-line]').forEach(el => {
             el.addEventListener('click', () => {
@@ -264,10 +564,29 @@ function generateHtml(content: string, fileName: string, addedCount: number, rem
         window.navigateDiff = navigateDiff;
 
         window.addEventListener('load', () => {
+            initMermaid();
             initDiffNav();
         });
 
         document.addEventListener('keydown', (e) => {
+            if (isDiagramsModalOpen) {
+                if (e.key === 'Escape') {
+                    e.preventDefault();
+                    closeDiagramsModal();
+                    return;
+                }
+                if (e.key === 'ArrowLeft') {
+                    e.preventDefault();
+                    navigateDiagram('prev');
+                    return;
+                }
+                if (e.key === 'ArrowRight') {
+                    e.preventDefault();
+                    navigateDiagram('next');
+                    return;
+                }
+            }
+
             const activeEl = document.activeElement;
             const isInputFocused = activeEl && (
                 activeEl.tagName === 'INPUT' ||

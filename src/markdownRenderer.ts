@@ -3,4 +3,4 @@
  * This file exists for backwards compatibility with existing imports.
  */
 
-export { renderMarkdownWithDiff } from './core/markdownRenderer';
+export { renderMarkdownWithDiff, extractMermaidTitle } from './core/markdownRenderer';

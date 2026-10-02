@@ -1240,3 +1240,479 @@ body.vscode-high-contrast .diff-word-added {
     background: rgba(46, 160, 67, 0.2);
     color: var(--diff-add-text);
 }
+
+/* ==========================================================================
+   Mermaid Diagrams & Multi-tab View Styles
+   ========================================================================== */
+
+/* Header Diagrams View Button */
+.diagrams-view-btn {
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    color: var(--accent-purple);
+    padding: 6px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 600;
+    transition: all 0.15s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.diagrams-view-btn:hover {
+    background: var(--border-color);
+    color: var(--text-primary);
+    transform: translateY(-1px);
+}
+
+/* Inline Mermaid Container */
+.mermaid-container {
+    margin: 20px 0;
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    background: var(--bg-secondary);
+    overflow: hidden;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.mermaid-container:hover {
+    border-color: var(--accent-blue);
+}
+
+.mermaid-container.has-diff {
+    border-color: var(--diff-add-border);
+}
+
+/* Mermaid Card Toolbar */
+.mermaid-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 14px;
+    background: var(--bg-tertiary);
+    border-bottom: 1px solid var(--border-color);
+    font-size: 12px;
+    user-select: none;
+}
+
+.mermaid-toolbar-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+
+.mermaid-badge {
+    background: linear-gradient(135deg, #a371f7, #58a6ff);
+    color: #ffffff;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.mermaid-title {
+    font-weight: 600;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.mermaid-toolbar-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.mermaid-action-btn {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    cursor: pointer;
+    font-weight: 500;
+    transition: all 0.15s ease;
+}
+
+.mermaid-action-btn:hover {
+    background: var(--border-color);
+    color: var(--text-primary);
+}
+
+.mermaid-action-btn.active {
+    background: var(--accent-purple);
+    color: #ffffff;
+    border-color: var(--accent-purple);
+}
+
+/* Diagram Render Wrap */
+.mermaid-diagram-wrap {
+    padding: 20px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    overflow-x: auto;
+    background: var(--bg-secondary);
+}
+
+.mermaid-rendered {
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.mermaid-rendered svg {
+    max-width: 100%;
+    height: auto;
+    font-family: inherit;
+}
+
+.mermaid-loading {
+    color: var(--text-muted);
+    font-size: 13px;
+    font-style: italic;
+    padding: 16px;
+}
+
+/* Mermaid Syntax Error */
+.mermaid-error {
+    background: rgba(248, 81, 73, 0.1);
+    border: 1px solid var(--diff-remove-border);
+    border-radius: 6px;
+    padding: 12px 16px;
+    color: var(--diff-remove-text);
+    width: 100%;
+}
+
+.mermaid-error-title {
+    font-weight: 600;
+    font-size: 13px;
+    margin-bottom: 4px;
+}
+
+.mermaid-error-msg {
+    font-family: monospace;
+    font-size: 12px;
+    white-space: pre-wrap;
+    word-break: break-all;
+}
+
+.mermaid-source-wrapper {
+    border-top: 1px solid var(--border-color);
+    background: var(--code-bg);
+}
+
+.mermaid-source-wrapper pre {
+    margin: 0;
+    border: none;
+    border-radius: 0;
+}
+
+/* ==========================================================================
+   Diagrams Multi-tab View Modal (Fallback & Standalone Demo)
+   ========================================================================== */
+.diagrams-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 2000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+}
+
+.diagrams-modal-backdrop {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.65);
+    backdrop-filter: blur(8px);
+}
+
+.diagrams-modal-window {
+    position: relative;
+    z-index: 2001;
+    width: 94vw;
+    height: 92vh;
+    max-width: 1600px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
+}
+
+.diagrams-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border-color);
+    padding: 8px 16px;
+    gap: 16px;
+    min-height: 52px;
+}
+
+.diagrams-modal-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+.diagrams-close-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 18px;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    border-radius: 6px;
+    transition: all 0.15s ease;
+    margin-left: 4px;
+}
+
+.diagrams-close-btn:hover {
+    background: rgba(248, 81, 73, 0.2);
+    color: #ff6666;
+}
+
+.diagrams-modal-body {
+    flex: 1;
+    overflow: auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg-primary);
+    position: relative;
+    padding: 32px;
+}
+
+.diagrams-modal-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--bg-secondary);
+    border-top: 1px solid var(--border-color);
+    padding: 8px 16px;
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+/* ==========================================================================
+   Diagrams Multi-tab Dedicated View Panel
+   ========================================================================== */
+body.diagrams-view-body {
+    margin: 0;
+    padding: 0;
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+.diagrams-view-container {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+/* Header & Tab Bar */
+.diagrams-view-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border-color);
+    padding: 8px 16px;
+    gap: 16px;
+    min-height: 48px;
+    flex-shrink: 0;
+}
+
+.diagrams-tab-bar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    overflow-x: auto;
+    flex: 1;
+    padding-bottom: 2px;
+    scrollbar-width: thin;
+}
+
+.diagrams-tab {
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+    padding: 6px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+    white-space: nowrap;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.15s ease;
+    user-select: none;
+}
+
+.diagrams-tab:hover {
+    background: var(--border-color);
+    color: var(--text-primary);
+}
+
+.diagrams-tab.active {
+    background: var(--accent-purple);
+    border-color: var(--accent-purple);
+    color: #ffffff;
+    font-weight: 600;
+    box-shadow: 0 2px 8px rgba(163, 113, 247, 0.4);
+}
+
+.diagrams-tab .tab-number {
+    opacity: 0.8;
+    font-size: 11px;
+}
+
+.diagrams-view-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+.diagrams-ctrl-btn {
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+    padding: 5px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 500;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s ease;
+}
+
+.diagrams-ctrl-btn:hover {
+    background: var(--border-color);
+    color: var(--text-primary);
+}
+
+#diagrams-zoom-level {
+    min-width: 52px;
+    font-family: monospace;
+}
+
+/* View Main Stage */
+.diagrams-view-main {
+    flex: 1;
+    overflow: auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg-primary);
+    position: relative;
+    padding: 24px;
+}
+
+.diagrams-stage {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.diagrams-viewport {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transform-origin: center center;
+    transition: transform 0.1s ease-out;
+}
+
+.diagrams-viewport svg {
+    max-width: 92vw;
+    max-height: 75vh;
+    height: auto;
+    display: block;
+}
+
+.diagrams-viewport .empty-state {
+    text-align: center;
+    color: var(--text-muted);
+}
+
+.diagrams-viewport .empty-state .icon {
+    font-size: 40px;
+    margin-bottom: 8px;
+}
+
+/* View Footer */
+.diagrams-view-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--bg-secondary);
+    border-top: 1px solid var(--border-color);
+    padding: 8px 16px;
+    font-size: 12px;
+    color: var(--text-secondary);
+    flex-shrink: 0;
+}
+
+.diagrams-nav-btn {
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+    padding: 5px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 500;
+    transition: all 0.15s ease;
+}
+
+.diagrams-nav-btn:hover:not(:disabled) {
+    background: var(--border-color);
+    color: var(--text-primary);
+}
+
+.diagrams-nav-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.diagrams-footer-info {
+    font-weight: 500;
+    color: var(--text-muted);
+}
+

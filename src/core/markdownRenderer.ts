@@ -12,6 +12,52 @@ import {
 } from './commentParser';
 import { computeIntraLineDiff, restoreWordDiffPlaceholders } from './intraLineDiff';
 
+export function extractMermaidTitle(code: string, index: number): string {
+    const trimmed = code.trim();
+    
+    // 1. Check YAML frontmatter title
+    const frontmatterMatch = trimmed.match(/^---\s*[\r\n]+([\s\S]*?)[\r\n]+---/);
+    if (frontmatterMatch) {
+        const titleMatch = frontmatterMatch[1].match(/^title:\s*(.+)$/m);
+        if (titleMatch) {
+            return titleMatch[1].trim().replace(/^["']|["']$/g, '');
+        }
+    }
+
+    // 2. Check comments %% title: ... or %% ...
+    const commentMatch = trimmed.match(/^%%\s*(?:title:)?\s*([^\r\n]+)$/mi);
+    if (commentMatch && commentMatch[1].trim()) {
+        const commentTitle = commentMatch[1].trim();
+        // Ignore directive comments like %%{init: ...}%%
+        if (!commentTitle.startsWith('{') && !commentTitle.endsWith('}')) {
+            return commentTitle;
+        }
+    }
+
+    // 3. Infer diagram type from first non-comment non-empty line
+    const lines = trimmed.split('\n');
+    for (const rawLine of lines) {
+        const l = rawLine.trim();
+        if (!l || l.startsWith('%%') || l === '---') continue;
+        
+        if (/^(flowchart|graph)\b/i.test(l)) return `Flowchart ${index + 1}`;
+        if (/^sequenceDiagram\b/i.test(l)) return `Sequence Diagram ${index + 1}`;
+        if (/^classDiagram\b/i.test(l)) return `Class Diagram ${index + 1}`;
+        if (/^stateDiagram(-v2)?\b/i.test(l)) return `State Diagram ${index + 1}`;
+        if (/^erDiagram\b/i.test(l)) return `ER Diagram ${index + 1}`;
+        if (/^gantt\b/i.test(l)) return `Gantt Chart ${index + 1}`;
+        if (/^pie\b/i.test(l)) return `Pie Chart ${index + 1}`;
+        if (/^gitGraph\b/i.test(l)) return `Git Graph ${index + 1}`;
+        if (/^mindmap\b/i.test(l)) return `Mindmap ${index + 1}`;
+        if (/^quadrantChart\b/i.test(l)) return `Quadrant Chart ${index + 1}`;
+        if (/^journey\b/i.test(l)) return `User Journey ${index + 1}`;
+        if (/^c4(Context|Container|Component)\b/i.test(l)) return `C4 Diagram ${index + 1}`;
+        break;
+    }
+
+    return `Diagram ${index + 1}`;
+}
+
 export async function renderMarkdownWithDiff(
     markdown: string,
     diff: FileDiff | null,
@@ -55,11 +101,12 @@ export async function renderMarkdownWithDiff(
     }
 
     let html = '';
-    const commentThreadsHtml: string[] = []; // Collect comment threads to append at end
+    const commentThreadsHtml: string[] = [];
     let inCodeBlock = false;
     let codeBlockContent = '';
     let codeBlockLang = '';
     let codeBlockStartLine = 0;
+    let mermaidDiagramIndex = 0;
     let inList = false;
     let listItems: { content: string; indent: number; lineNumber: number; type: 'ul' | 'ol' }[] = [];
     let inTable = false;
@@ -794,12 +841,53 @@ export async function renderMarkdownWithDiff(
                 });
                 codeHtml += '</code></pre>';
                 
-                // Check if the entire block was added
+                // Check if this is a mermaid diagram
                 const blockAdded = addedLines.has(codeBlockStartLine);
-                if (blockAdded) {
-                    html += wrapWithDiff(codeHtml, codeBlockStartLine, true);
+                if (codeBlockLang.toLowerCase() === 'mermaid') {
+                    const diagramTitle = extractMermaidTitle(codeBlockContent, mermaidDiagramIndex);
+                    const rawEscaped = escapeHtml(codeBlockContent);
+                    const hasAnyAddedLine = blockAdded || codeLines.some((_, idx) => addedLines.has(codeBlockStartLine + 1 + idx));
+                    
+                    const mermaidContainer = `<div class="mermaid-container${hasAnyAddedLine ? ' has-diff' : ''}" data-diagram-index="${mermaidDiagramIndex}" data-diagram-title="${escapeHtml(diagramTitle)}" data-line="${codeBlockStartLine}">` +
+                        `<div class="mermaid-toolbar">` +
+                            `<div class="mermaid-toolbar-left">` +
+                                `<span class="mermaid-badge">Mermaid</span>` +
+                                `<span class="mermaid-title">${escapeHtml(diagramTitle)}</span>` +
+                            `</div>` +
+                            `<div class="mermaid-toolbar-actions">` +
+                                `<button class="mermaid-action-btn mermaid-open-tab-btn" onclick="openDiagramsView(${mermaidDiagramIndex})" title="Open in Diagrams View (Beside)" aria-label="Open in Diagrams View">` +
+                                    `⧉ Open in View` +
+                                `</button>` +
+                                `<button class="mermaid-action-btn mermaid-code-toggle" onclick="toggleMermaidSource(this)" title="Toggle Source Code" aria-label="Toggle Source Code">` +
+                                    `&lt;/&gt; Code` +
+                                `</button>` +
+                            `</div>` +
+                        `</div>` +
+                        `<div class="mermaid-diagram-wrap">` +
+                            `<div class="mermaid-raw" style="display:none;">${rawEscaped}</div>` +
+                            `<div class="mermaid-rendered" id="mermaid-inline-${mermaidDiagramIndex}">` +
+                                `<div class="mermaid-loading">Rendering diagram...</div>` +
+                            `</div>` +
+                        `</div>` +
+                        `<div class="mermaid-source-wrapper" style="display:none;">` +
+                            codeHtml +
+                        `</div>` +
+                    `</div>`;
+
+                    if (blockAdded) {
+                        html += wrapWithDiff(mermaidContainer, codeBlockStartLine, true);
+                    } else {
+                        html += mermaidContainer;
+                    }
+
+                    mermaidDiagramIndex++;
                 } else {
-                    html += codeHtml;
+                    // Standard code block
+                    if (blockAdded) {
+                        html += wrapWithDiff(codeHtml, codeBlockStartLine, true);
+                    } else {
+                        html += codeHtml;
+                    }
                 }
                 
                 inCodeBlock = false;

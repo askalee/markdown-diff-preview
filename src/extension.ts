@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { MarkdownDiffPreviewPanel } from './markdownPreview';
+import { MarkdownDiagramsPanel } from './markdownDiagramsPanel';
 
 export function activate(context: vscode.ExtensionContext) {
     console.log('Markdown Diff Preview is now active!');
@@ -11,6 +12,19 @@ export function activate(context: vscode.ExtensionContext) {
             const editor = vscode.window.activeTextEditor;
             if (editor && editor.document.languageId === 'markdown') {
                 MarkdownDiffPreviewPanel.createOrShow(context.extensionUri, editor.document);
+            } else {
+                vscode.window.showWarningMessage('Please open a Markdown file first');
+            }
+        }
+    );
+
+    // Register the open diagrams view command
+    const openDiagramsCommand = vscode.commands.registerCommand(
+        'markdownDiffPreview.openDiagramsView',
+        () => {
+            const editor = vscode.window.activeTextEditor;
+            if (editor && editor.document.languageId === 'markdown') {
+                MarkdownDiagramsPanel.createOrShow(context.extensionUri, editor.document);
             } else {
                 vscode.window.showWarningMessage('Please open a Markdown file first');
             }
@@ -44,6 +58,7 @@ export function activate(context: vscode.ExtensionContext) {
     const onDocumentChange = vscode.workspace.onDidChangeTextDocument((e) => {
         if (e.document.languageId === 'markdown') {
             MarkdownDiffPreviewPanel.updateIfVisible(e.document);
+            MarkdownDiagramsPanel.updateIfVisible(e.document);
         }
     });
 
@@ -62,6 +77,7 @@ export function activate(context: vscode.ExtensionContext) {
 
     context.subscriptions.push(
         openPreviewCommand,
+        openDiagramsCommand,
         refreshCommand,
         nextDiffCommand,
         prevDiffCommand,
@@ -73,4 +89,7 @@ export function activate(context: vscode.ExtensionContext) {
 
 export function deactivate() {
     MarkdownDiffPreviewPanel.dispose();
+    if (MarkdownDiagramsPanel.currentPanel) {
+        MarkdownDiagramsPanel.currentPanel.dispose();
+    }
 }

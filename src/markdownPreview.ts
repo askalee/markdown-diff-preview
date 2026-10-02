@@ -3,6 +3,7 @@ import * as path from 'path';
 import { getGitDiff, getGitBranch, getGitStatus, FileDiff } from './gitDiff';
 import { renderMarkdownWithDiff } from './core/markdownRenderer';
 import { parseCommentsData } from './core/commentParser';
+import { MarkdownDiagramsPanel } from './markdownDiagramsPanel';
 
 export class MarkdownDiffPreviewPanel {
     public static currentPanel: MarkdownDiffPreviewPanel | undefined;
@@ -111,6 +112,11 @@ export class MarkdownDiffPreviewPanel {
                         break;
                     case 'updateComment':
                         await this._updateComment(message.commentId, message.type, message.content);
+                        break;
+                    case 'openDiagramsView':
+                        if (this._document) {
+                            MarkdownDiagramsPanel.createOrShow(this._extensionUri, this._document, message.index ?? 0);
+                        }
                         break;
                 }
             },
@@ -456,6 +462,7 @@ export class MarkdownDiffPreviewPanel {
             branch,
             status
         );
+        MarkdownDiagramsPanel.updateIfVisible(this._document);
     }
 
     private async _getHtmlForWebview(
@@ -496,9 +503,12 @@ export class MarkdownDiffPreviewPanel {
         const addedCount = diff?.addedLines.size || 0;
         const removedCount = diff?.removedLines.size || 0;
 
-        // Get URI for the external stylesheet
+        // Get URI for the external stylesheet and mermaid script
         const stylesUri = this._panel.webview.asWebviewUri(
             vscode.Uri.joinPath(this._extensionUri, 'media', 'styles.css')
+        );
+        const mermaidUri = this._panel.webview.asWebviewUri(
+            vscode.Uri.joinPath(this._extensionUri, 'media', 'mermaid.min.js')
         );
 
         return `<!DOCTYPE html>
@@ -506,9 +516,10 @@ export class MarkdownDiffPreviewPanel {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${this._panel.webview.cspSource}; script-src 'unsafe-inline'; img-src ${this._panel.webview.cspSource} https: data:; connect-src ${this._panel.webview.cspSource} https:;">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${this._panel.webview.cspSource} 'unsafe-inline'; script-src 'unsafe-inline' 'unsafe-eval' ${this._panel.webview.cspSource}; font-src ${this._panel.webview.cspSource} data:; img-src ${this._panel.webview.cspSource} https: data: blob:; connect-src ${this._panel.webview.cspSource} https:;">
     <title>Markdown Diff Preview</title>
     <link rel="stylesheet" href="${stylesUri}">
+    <script src="${mermaidUri}"></script>
 </head>
 <body>
     <div class="header">
@@ -532,6 +543,9 @@ export class MarkdownDiffPreviewPanel {
                     Next <span class="nav-arrow">▼</span>
                 </button>
             </div>
+            <button class="diagrams-view-btn" id="diagrams-header-btn" onclick="openDiagramsView(0)" title="Open all diagrams in dedicated tab view (Beside)" style="display:none;">
+                📊 Diagrams (<span id="diagrams-header-count">0</span>)
+            </button>
             <button class="refresh-btn" onclick="refresh()">↻ Refresh</button>
         </div>
     </div>
@@ -579,6 +593,134 @@ export class MarkdownDiffPreviewPanel {
         function redo() {
             vscode.postMessage({ command: 'redo' });
         }
+
+        // ==========================================
+        // Mermaid Rendering & Tabbed View System
+        // ==========================================
+        let diagramsList = []; // { index, title, line, rawCode, svgHtml, container }
+        let currentDiagramIndex = 0;
+        let currentDiagramZoom = 1.0;
+        let isDiagramsModalOpen = false;
+
+        function toggleMermaidSource(btn) {
+            const container = btn.closest('.mermaid-container');
+            if (!container) return;
+            const diagramWrap = container.querySelector('.mermaid-diagram-wrap');
+            const sourceWrap = container.querySelector('.mermaid-source-wrapper');
+            if (!diagramWrap || !sourceWrap) return;
+
+            const isSourceVisible = sourceWrap.style.display !== 'none';
+            if (isSourceVisible) {
+                sourceWrap.style.display = 'none';
+                diagramWrap.style.display = '';
+                btn.classList.remove('active');
+            } else {
+                sourceWrap.style.display = '';
+                diagramWrap.style.display = 'none';
+                btn.classList.add('active');
+            }
+        }
+
+        async function waitForMermaid(maxWaitMs = 3000) {
+            const start = Date.now();
+            while (!window.mermaid && (Date.now() - start) < maxWaitMs) {
+                await new Promise(r => setTimeout(r, 50));
+            }
+            return window.mermaid;
+        }
+
+        async function initMermaid() {
+            const containers = Array.from(document.querySelectorAll('.mermaid-container'));
+            if (containers.length === 0) {
+                const headerBtn = document.getElementById('diagrams-header-btn');
+                if (headerBtn) headerBtn.style.display = 'none';
+                return;
+            }
+
+            // Determine mermaid theme based on body theme classes
+            let mermaidTheme = 'dark';
+            if (document.body.classList.contains('vscode-light') || document.body.classList.contains('theme-light')) {
+                mermaidTheme = 'default';
+            } else if (document.body.classList.contains('vscode-high-contrast')) {
+                mermaidTheme = 'forest';
+            }
+
+            const m = await waitForMermaid();
+            if (m) {
+                try {
+                    mermaid.initialize({
+                        startOnLoad: false,
+                        theme: mermaidTheme,
+                        securityLevel: 'loose',
+                        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+                    });
+                } catch (e) {
+                    console.error('Failed to initialize mermaid:', e);
+                }
+            } else {
+                console.error('[MarkdownPreview] Mermaid library timed out or failed to load');
+            }
+
+            diagramsList = [];
+
+            for (let i = 0; i < containers.length; i++) {
+                const container = containers[i];
+                const index = parseInt(container.dataset.diagramIndex || String(i), 10);
+                const title = container.dataset.diagramTitle || ('Diagram ' + (index + 1));
+                const line = parseInt(container.dataset.line || '0', 10);
+                const rawEl = container.querySelector('.mermaid-raw');
+                const renderedEl = container.querySelector('.mermaid-rendered');
+                const rawCode = rawEl ? (rawEl.textContent || '').trim() : '';
+
+                let svgHtml = '';
+                if (window.mermaid && rawCode) {
+                    try {
+                        const renderId = 'mermaid-svg-render-' + index + '-' + Math.floor(Math.random() * 10000);
+                        const renderRes = await mermaid.render(renderId, rawCode);
+                        svgHtml = renderRes.svg;
+                        if (renderedEl) {
+                            renderedEl.innerHTML = svgHtml;
+                        }
+                    } catch (err) {
+                        console.error('Mermaid render error for diagram ' + index + ':', err);
+                        if (renderedEl) {
+                            renderedEl.innerHTML = '<div class="mermaid-error">' +
+                                '<div class="mermaid-error-title">⚠️ Mermaid Syntax Error</div>' +
+                                '<div class="mermaid-error-msg">' + (err.message || String(err)) + '</div>' +
+                            '</div>';
+                        }
+                    }
+                }
+
+                diagramsList.push({
+                    index: index,
+                    title: title,
+                    line: line,
+                    rawCode: rawCode,
+                    svgHtml: svgHtml,
+                    container: container
+                });
+            }
+
+            // Update header button
+            const headerBtn = document.getElementById('diagrams-header-btn');
+            const headerCount = document.getElementById('diagrams-header-count');
+            if (headerBtn && headerCount) {
+                headerCount.textContent = String(diagramsList.length);
+                headerBtn.style.display = 'inline-flex';
+            }
+        }
+
+        function openDiagramsView(index = 0) {
+            vscode.postMessage({
+                command: 'openDiagramsView',
+                index: index
+            });
+        }
+
+        window.openDiagramsView = openDiagramsView;
+        window.openDiagramInTab = openDiagramsView;
+        window.toggleMermaidSource = toggleMermaidSource;
 
         // Comment system functions
         let activeCommentId = null;
@@ -728,7 +870,8 @@ export class MarkdownDiffPreviewPanel {
         });
 
         // Make comment threads container scrollable and position correctly
-        window.addEventListener('load', () => {
+        function onDocumentReady() {
+            initMermaid();
             const container = document.querySelector('.comment-threads-container');
             if (container) {
                 // Ensure container is positioned correctly
@@ -738,7 +881,14 @@ export class MarkdownDiffPreviewPanel {
                 updateCommentNavState();
             }
             initDiffNav();
-        });
+        }
+
+        if (document.readyState === 'complete' || document.readyState === 'interactive') {
+            onDocumentReady();
+        } else {
+            document.addEventListener('DOMContentLoaded', onDocumentReady);
+            window.addEventListener('load', onDocumentReady);
+        }
 
         // Word-level diff hover sync (Scheme C)
         document.addEventListener('mouseover', (e) => {
