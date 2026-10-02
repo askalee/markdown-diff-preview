@@ -62,6 +62,12 @@ export function activate(context: vscode.ExtensionContext) {
         }
     });
 
+    const onConfigChange = vscode.workspace.onDidChangeConfiguration((e) => {
+        if (e.affectsConfiguration('markdownDiffPreview.classDiagramDetail')) {
+            MarkdownDiagramsPanel.refresh();
+        }
+    });
+
     // Update when switching to a different markdown file
     const onActiveEditorChange = vscode.window.onDidChangeActiveTextEditor((editor) => {
         if (editor && editor.document.languageId === 'markdown') {
@@ -83,6 +89,7 @@ export function activate(context: vscode.ExtensionContext) {
         prevDiffCommand,
         onDocumentChange,
         onActiveEditorChange,
+        onConfigChange,
         gitWatcher
     );
 }

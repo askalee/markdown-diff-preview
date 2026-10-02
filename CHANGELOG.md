@@ -5,6 +5,15 @@ All notable changes to the "Markdown Diff Preview" extension will be documented 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2026-10-02
+
+### Added
+
+- Class diagram detail control in the Diagrams view (`markdownDiffPreview.classDiagramDetail`: `minimal` / `compact` / `full`, default `full`); members starting with `+` / `-` are treated as methods, all others as properties
+- `minimal` collapses emptied `class X { ... }` blocks to bare `class X` and hides empty compartments via Mermaid `hideEmptyMembersBox`
+- `compact` shows properties only with the empty methods divider hidden
+- Header dropdown in the Diagrams view to switch class detail level (writes back to the global setting)
+
 ## [1.0.0] - 2026-01-23
 
 ### Added

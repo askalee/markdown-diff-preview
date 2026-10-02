@@ -141,6 +141,7 @@ As a user with multiple diagrams, I want a dedicated view to inspect each diagra
 - [ ] AC-05: When I click `Copy SVG` the current diagram's SVG is copied, with a `SVG copied to clipboard ✓` toast; with no SVG the toast shows `No SVG available`.
 - [ ] AC-06: When I click `⎘ Jump to line`, the Editor jumps to that diagram's start line in the Markdown.
 - [ ] AC-07: When I keep typing in the editor, the Diagrams view updates automatically (`updateIfVisible` only applies to the same document).
+- [ ] AC-08: `markdownDiffPreview.classDiagramDetail` (`minimal` / `compact` / `full`, default `full`) controls how much detail class diagrams show in the Diagrams view: `minimal` shows class names + relationships only (emptied `class X { ... }` blocks collapse to bare `class X`, single compartment via Mermaid `hideEmptyMembersBox`), `compact` additionally shows properties (members whose text does not start with `+` / `-`, two compartments — the empty methods divider is hidden in the webview), `full` shows everything. Non-class diagrams are never filtered. The header's `Class: minimal/compact/full` dropdown reflects the current value and writes back to the global setting on change; editing Settings JSON refreshes the view via `onDidChangeConfiguration`.
 
 ---
 
@@ -194,6 +195,7 @@ As a user, I want settings to adjust the diff base and display options, so the e
 - [ ] AC-02: `markdownDiffPreview.showLineNumbers` (default `true`): whether added lines show line numbers.
 - [ ] AC-03: `markdownDiffPreview.highlightStyle` (default `both`, only `inline` / `gutter` / `both` allowed): how diff highlights are displayed.
 - [ ] AC-04: `markdownDiffPreview.enableWordDiff` (default `true`): whether word-level diff is enabled (see US-04).
+- [ ] AC-05: `markdownDiffPreview.classDiagramDetail` (default `full`, only `minimal` / `compact` / `full` allowed): how much detail class diagrams show in the Diagrams view (see US-10 AC-08).
 
 ---
 

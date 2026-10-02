@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import { extractMermaidTitle } from './core/markdownRenderer';
+import { ClassDiagramDetail, filterClassDiagram } from './core/classDiagramDetail';
 
 interface ParsedDiagram {
     index: number;
@@ -52,6 +53,15 @@ export class MarkdownDiagramsPanel {
         }
     }
 
+    public static refresh() {
+        MarkdownDiagramsPanel.currentPanel?._update();
+    }
+
+    public static getConfiguredDetail(): ClassDiagramDetail {
+        const value = vscode.workspace.getConfiguration('markdownDiffPreview').get<string>('classDiagramDetail');
+        return value === 'minimal' || value === 'compact' ? value : 'full';
+    }
+
     private constructor(panel: vscode.WebviewPanel, extensionUri: vscode.Uri, document: vscode.TextDocument, initialIndex: number) {
         this._panel = panel;
         this._extensionUri = extensionUri;
@@ -70,6 +80,12 @@ export class MarkdownDiagramsPanel {
                         break;
                     case 'tabChanged':
                         this._currentIndex = message.index;
+                        break;
+                    case 'setClassDetail':
+                        if (message.value === 'minimal' || message.value === 'compact' || message.value === 'full') {
+                            await vscode.workspace.getConfiguration('markdownDiffPreview').update('classDiagramDetail', message.value, true);
+                            this._update();
+                        }
                         break;
                 }
             },
@@ -153,11 +169,15 @@ export class MarkdownDiagramsPanel {
         if (!this._document) return;
         const fileName = path.basename(this._document.fileName);
         this._panel.title = `📊 Diagrams: ${fileName}`;
-        const diagrams = this._extractDiagrams(this._document.getText());
-        this._panel.webview.html = this._getHtmlForWebview(diagrams, fileName);
+        const detail = MarkdownDiagramsPanel.getConfiguredDetail();
+        const diagrams = this._extractDiagrams(this._document.getText()).map(d => ({
+            ...d,
+            code: filterClassDiagram(d.code, detail)
+        }));
+        this._panel.webview.html = this._getHtmlForWebview(diagrams, fileName, detail);
     }
 
-    private _getHtmlForWebview(diagrams: ParsedDiagram[], fileName: string): string {
+    private _getHtmlForWebview(diagrams: ParsedDiagram[], fileName: string, detailLevel: ClassDiagramDetail): string {
         const stylesUri = this._panel.webview.asWebviewUri(
             vscode.Uri.joinPath(this._extensionUri, 'media', 'styles.css')
         );
@@ -185,6 +205,11 @@ export class MarkdownDiagramsPanel {
                 <!-- Dynamically populated tabs -->
             </div>
             <div class="diagrams-view-actions">
+                <select class="diagrams-ctrl-btn" id="class-detail-select" onchange="changeClassDetail(this.value)" title="Class diagram detail (applies to class diagrams only)" aria-label="Class diagram detail">
+                    <option value="minimal"${detailLevel === 'minimal' ? ' selected' : ''}>Class: minimal</option>
+                    <option value="compact"${detailLevel === 'compact' ? ' selected' : ''}>Class: compact</option>
+                    <option value="full"${detailLevel === 'full' ? ' selected' : ''}>Class: full</option>
+                </select>
                 <button class="diagrams-ctrl-btn" onclick="zoomDiagram(1/1.2)" title="Zoom Out (÷1.2)" aria-label="Zoom Out">
                     <span class="ctrl-icon">−</span>
                 </button>
@@ -242,6 +267,7 @@ export class MarkdownDiagramsPanel {
         let panY = 0;
         const MIN_ZOOM = 0.2;
         const MAX_ZOOM = 50.0;
+        const classDetail = '${detailLevel}';
         const renderedSvgs = {};
         const viewStates = {};
 
@@ -361,6 +387,7 @@ export class MarkdownDiagramsPanel {
                         startOnLoad: false,
                         theme: getTheme(),
                         securityLevel: 'loose',
+                        class: { hideEmptyMembersBox: classDetail !== 'full' },
                         fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
                     });
                 } catch (e) {
@@ -431,6 +458,32 @@ export class MarkdownDiagramsPanel {
             }
         }
 
+        // Hide dividers of empty class compartments (minimal/compact only).
+        // Mermaid always draws both divider lines when a class has any
+        // member, so a compact class (attributes only) would still show a
+        // trailing empty methods strip. hideEmptyMembersBox covers the
+        // fully-empty case; this covers the partially-empty one.
+        function collapseEmptyClassBoxes(viewport) {
+            if (classDetail === 'full' || !viewport) return;
+            viewport.querySelectorAll('g.node').forEach((node) => {
+                const members = node.querySelector('.members-group');
+                const methods = node.querySelector('.methods-group');
+                if (!members && !methods) return; // not a class node
+                const membersEmpty = !members || members.textContent.trim() === '';
+                const methodsEmpty = !methods || methods.textContent.trim() === '';
+                if (!membersEmpty && !methodsEmpty) return;
+                const dividers = node.querySelectorAll('.divider');
+                if (dividers.length === 0) return;
+                if (membersEmpty && methodsEmpty) {
+                    dividers.forEach((d) => { d.style.display = 'none'; });
+                } else if (methodsEmpty) {
+                    dividers[dividers.length - 1].style.display = 'none';
+                } else {
+                    dividers[0].style.display = 'none';
+                }
+            });
+        }
+
         async function selectTab(index) {
             if (index < 0 || index >= rawDiagrams.length) return;
             if (index !== currentIndex) {
@@ -455,6 +508,7 @@ export class MarkdownDiagramsPanel {
                 viewport.innerHTML = '<div class="mermaid-loading">Rendering diagram...</div>';
                 const svg = await renderDiagram(index);
                 viewport.innerHTML = svg;
+                collapseEmptyClassBoxes(viewport);
             }
 
             if (hasViewState(index)) {
@@ -640,6 +694,11 @@ export class MarkdownDiagramsPanel {
             const item = rawDiagrams[currentIndex];
             if (!item || !item.line) return;
             vscode.postMessage({ command: 'scrollToLine', line: item.line });
+        }
+
+        function changeClassDetail(value) {
+            if (value !== 'minimal' && value !== 'compact' && value !== 'full') return;
+            vscode.postMessage({ command: 'setClassDetail', value: value });
         }
 
         function showCopyToast(msg) {

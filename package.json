@@ -2,7 +2,7 @@
   "name": "markdown-diff-preview",
   "displayName": "Markdown Diff Preview",
   "description": "A beautiful Markdown preview that highlights git diffs inline with green/red highlighting for added/removed lines",
-  "version": "1.0.9",
+  "version": "1.1.0",
   "publisher": "batlounis",
   "author": {
     "name": "Salim Batlouni"
@@ -143,6 +143,16 @@
           "type": "boolean",
           "default": true,
           "description": "Enable word-level diff highlighting for modified lines"
+        },
+        "markdownDiffPreview.classDiagramDetail": {
+          "type": "string",
+          "enum": [
+            "minimal",
+            "compact",
+            "full"
+          ],
+          "default": "full",
+          "description": "How much detail to show in class diagrams (Diagrams view only): minimal shows class names only, compact also shows properties (members without +/- prefix), full shows everything"
         }
       }
     }
