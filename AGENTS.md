@@ -36,3 +36,11 @@ After every Green and before closing, run one code smell scan:
 - [ ] `npm test` fully passes
 - [ ] `npm run compile` + `npm run lint` report no errors
 - [ ] Code smell check completed with necessary refactors done
+- [ ] `docs/SPEC.md` updated if behavior changed, otherwise confirmed N/A
+
+## 5. Spec Sync (Mandatory)
+
+1. `docs/SPEC.md` describes currently implemented features as User Story + Acceptance Criteria. No future plans.
+2. Any behavior change (new feature, behavior tweak, bug fix that changes observable behavior, settings change, edge-case handling change) must update `docs/SPEC.md` in the same change: add / update the corresponding US + AC, keep Non-Goals accurate.
+3. Pure refactor / internal cleanup with no observable behavior change needs no SPEC update.
+4. SPEC update is part of Green, not a follow-up.
