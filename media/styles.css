@@ -1634,13 +1634,21 @@ body.diagrams-view-body {
 /* View Main Stage */
 .diagrams-view-main {
     flex: 1;
-    overflow: auto;
+    overflow: hidden;
     display: flex;
     align-items: center;
     justify-content: center;
     background: var(--bg-primary);
     position: relative;
     padding: 24px;
+    cursor: grab;
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+.diagrams-view-main.dragging {
+    cursor: grabbing;
 }
 
 .diagrams-stage {
@@ -1649,6 +1657,7 @@ body.diagrams-view-body {
     display: flex;
     align-items: center;
     justify-content: center;
+    pointer-events: none;
 }
 
 .diagrams-viewport {
@@ -1656,7 +1665,11 @@ body.diagrams-view-body {
     align-items: center;
     justify-content: center;
     transform-origin: center center;
-    transition: transform 0.1s ease-out;
+    pointer-events: auto;
+}
+
+.diagrams-view-main.dragging .diagrams-viewport {
+    transition: none;
 }
 
 .diagrams-viewport svg {
@@ -1664,6 +1677,8 @@ body.diagrams-view-body {
     max-height: 75vh;
     height: auto;
     display: block;
+    pointer-events: auto;
+    -webkit-user-drag: none;
 }
 
 .diagrams-viewport .empty-state {

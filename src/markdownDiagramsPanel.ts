@@ -185,13 +185,13 @@ export class MarkdownDiagramsPanel {
                 <!-- Dynamically populated tabs -->
             </div>
             <div class="diagrams-view-actions">
-                <button class="diagrams-ctrl-btn" onclick="zoomDiagram(-0.15)" title="Zoom Out (−)" aria-label="Zoom Out">
+                <button class="diagrams-ctrl-btn" onclick="zoomDiagram(1/1.2)" title="Zoom Out (÷1.2)" aria-label="Zoom Out">
                     <span class="ctrl-icon">−</span>
                 </button>
-                <button class="diagrams-ctrl-btn" id="diagrams-zoom-level" onclick="resetZoom()" title="Reset Zoom (100%)" aria-label="Reset Zoom">
+                <button class="diagrams-ctrl-btn" id="diagrams-zoom-level" onclick="resetZoom()" title="Reset Zoom (fit to view)" aria-label="Reset Zoom">
                     100%
                 </button>
-                <button class="diagrams-ctrl-btn" onclick="zoomDiagram(0.15)" title="Zoom In (+)" aria-label="Zoom In">
+                <button class="diagrams-ctrl-btn" onclick="zoomDiagram(1.2)" title="Zoom In (×1.2)" aria-label="Zoom In">
                     <span class="ctrl-icon">+</span>
                 </button>
                 <button class="diagrams-ctrl-btn" onclick="copySvg()" title="Copy Diagram SVG to Clipboard" aria-label="Copy SVG">
@@ -238,7 +238,101 @@ export class MarkdownDiagramsPanel {
 
         let currentIndex = ${this._currentIndex};
         let currentZoom = 1.0;
+        let panX = 0;
+        let panY = 0;
+        const MIN_ZOOM = 0.2;
+        const MAX_ZOOM = 50.0;
         const renderedSvgs = {};
+        const viewStates = {};
+
+        function getViewState(index) {
+            if (!viewStates[index]) {
+                viewStates[index] = { zoom: 1.0, panX: 0, panY: 0 };
+            }
+            return viewStates[index];
+        }
+
+        function saveViewState(index) {
+            if (index === null || index === undefined || index < 0) return;
+            viewStates[index] = { zoom: currentZoom, panX: panX, panY: panY };
+        }
+
+        function restoreViewState(index) {
+            const s = getViewState(index);
+            currentZoom = s.zoom;
+            panX = s.panX;
+            panY = s.panY;
+            applyZoom();
+        }
+
+        function syncViewState() {
+            if (currentIndex !== null && currentIndex !== undefined && currentIndex >= 0) {
+                viewStates[currentIndex] = { zoom: currentZoom, panX: panX, panY: panY };
+            }
+        }
+
+        function hasViewState(index) {
+            return Object.prototype.hasOwnProperty.call(viewStates, index);
+        }
+
+        const baseSizes = {};
+
+        function measureIntrinsicSize() {
+            const viewport = document.getElementById('diagrams-viewport');
+            if (!viewport) return null;
+            const svg = viewport.querySelector('svg');
+            if (!svg) return null;
+            try {
+                const vb = svg.viewBox && svg.viewBox.baseVal;
+                if (vb && vb.width > 0 && vb.height > 0) {
+                    return { w: vb.width, h: vb.height };
+                }
+            } catch (e) { /* fall through */ }
+            const aw = svg.getAttribute('width') || '';
+            const ah = svg.getAttribute('height') || '';
+            const pw = parseFloat(aw);
+            const ph = parseFloat(ah);
+            if (aw.indexOf('%') === -1 && ah.indexOf('%') === -1 && pw > 0 && ph > 0) {
+                return { w: pw, h: ph };
+            }
+            // Unconstrained probe: measure a clone outside .diagrams-viewport
+            // so max-width/max-height rules don't shrink the measurement.
+            try {
+                const probe = document.createElement('div');
+                probe.style.cssText = 'position:fixed;left:-10000px;top:0;visibility:hidden;pointer-events:none;';
+                const clone = svg.cloneNode(true);
+                probe.appendChild(clone);
+                document.body.appendChild(probe);
+                const r = clone.getBoundingClientRect();
+                probe.remove();
+                if (r.width > 0 && r.height > 0) {
+                    return { w: r.width, h: r.height };
+                }
+            } catch (e) { /* fall through */ }
+            const rect = svg.getBoundingClientRect();
+            if (rect.width > 0 && rect.height > 0) {
+                return { w: rect.width, h: rect.height };
+            }
+            return null;
+        }
+
+        function resolveBaseSize(index) {
+            if (baseSizes[index]) return baseSizes[index];
+            const s = measureIntrinsicSize();
+            if (s) baseSizes[index] = s;
+            return s;
+        }
+
+        function computeFitZoom(index) {
+            const main = document.getElementById('diagrams-view-main');
+            const size = resolveBaseSize(index !== undefined ? index : currentIndex);
+            if (!main || !size) return 1.0;
+            const availW = main.clientWidth - 48;
+            const availH = main.clientHeight - 48;
+            if (availW <= 0 || availH <= 0) return 1.0;
+            const fit = Math.min(availW / size.w, availH / size.h) * 0.95;
+            return Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, fit));
+        }
 
         function getTheme() {
             if (document.body.classList.contains('vscode-light') || document.body.classList.contains('theme-light')) {
@@ -339,6 +433,9 @@ export class MarkdownDiagramsPanel {
 
         async function selectTab(index) {
             if (index < 0 || index >= rawDiagrams.length) return;
+            if (index !== currentIndex) {
+                saveViewState(currentIndex);
+            }
             currentIndex = index;
             vscode.postMessage({ command: 'tabChanged', index: index });
 
@@ -360,7 +457,17 @@ export class MarkdownDiagramsPanel {
                 viewport.innerHTML = svg;
             }
 
-            resetZoom();
+            if (hasViewState(index)) {
+                restoreViewState(index);
+            } else {
+                // First visit: pre-zoom to near full-viewport
+                resolveBaseSize(index);
+                currentZoom = computeFitZoom(index);
+                panX = 0;
+                panY = 0;
+                syncViewState();
+                applyZoom();
+            }
 
             // Update footer
             const info = document.getElementById('footer-info');
@@ -374,13 +481,32 @@ export class MarkdownDiagramsPanel {
             if (nextBtn) nextBtn.disabled = rawDiagrams.length <= 1;
         }
 
-        function zoomDiagram(delta) {
-            currentZoom = Math.max(0.2, Math.min(3.5, currentZoom + delta));
-            applyZoom();
+        function zoomDiagram(factor) {
+            setZoom(currentZoom * factor);
         }
 
         function resetZoom() {
-            currentZoom = 1.0;
+            currentZoom = computeFitZoom(currentIndex);
+            panX = 0;
+            panY = 0;
+            syncViewState();
+            applyZoom();
+        }
+
+        function setZoom(newZoom, cursorX, cursorY) {
+            const clamped = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, newZoom));
+            if (clamped === currentZoom) return;
+            const main = document.getElementById('diagrams-view-main');
+            if (main && typeof cursorX === 'number' && typeof cursorY === 'number') {
+                const rect = main.getBoundingClientRect();
+                const cx = cursorX - (rect.left + rect.width / 2);
+                const cy = cursorY - (rect.top + rect.height / 2);
+                const ratio = clamped / currentZoom;
+                panX = cx - (cx - panX) * ratio;
+                panY = cy - (cy - panY) * ratio;
+            }
+            currentZoom = clamped;
+            syncViewState();
             applyZoom();
         }
 
@@ -388,11 +514,115 @@ export class MarkdownDiagramsPanel {
             const viewport = document.getElementById('diagrams-viewport');
             const zoomLevelEl = document.getElementById('diagrams-zoom-level');
             if (viewport) {
-                viewport.style.transform = 'scale(' + currentZoom + ')';
+                // Crisp zoom: resize the SVG layout box so the browser
+                // re-renders vectors at final size (transform scale would
+                // upscale a rasterized layer and blur text).
+                const base = resolveBaseSize(currentIndex);
+                const svg = viewport.querySelector('svg');
+                if (svg && base) {
+                    svg.style.width = (base.w * currentZoom) + 'px';
+                    svg.style.height = (base.h * currentZoom) + 'px';
+                    svg.style.maxWidth = 'none';
+                    svg.style.maxHeight = 'none';
+                }
+                viewport.style.transform = 'translate(' + Math.round(panX) + 'px, ' + Math.round(panY) + 'px)';
             }
             if (zoomLevelEl) {
                 zoomLevelEl.textContent = Math.round(currentZoom * 100) + '%';
             }
+        }
+
+        function setupPanZoom() {
+            const main = document.getElementById('diagrams-view-main');
+            if (!main || main.dataset.panZoomBound === '1') return;
+            main.dataset.panZoomBound = '1';
+
+            // Direct wheel-to-zoom (no Ctrl required)
+            main.addEventListener('wheel', (e) => {
+                e.preventDefault();
+                const factor = Math.exp(-e.deltaY * 0.0015);
+                setZoom(currentZoom * factor, e.clientX, e.clientY);
+            }, { passive: false });
+
+            // Click-anywhere drag to pan (mouse + single-finger touch)
+            const pointers = new Map();
+            let panStartX = 0;
+            let panStartY = 0;
+            let basePanX = 0;
+            let basePanY = 0;
+            let pinchStartDist = 0;
+            let pinchStartZoom = 1.0;
+
+            main.addEventListener('pointerdown', (e) => {
+                // Only left button / touch / pen
+                if (e.pointerType === 'mouse' && e.button !== 0) return;
+                main.setPointerCapture(e.pointerId);
+                pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+                if (pointers.size === 1) {
+                    panStartX = e.clientX;
+                    panStartY = e.clientY;
+                    basePanX = panX;
+                    basePanY = panY;
+                    main.classList.add('dragging');
+                } else if (pointers.size === 2) {
+                    const pts = Array.from(pointers.values());
+                    pinchStartDist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+                    pinchStartZoom = currentZoom;
+                }
+            });
+
+            main.addEventListener('pointermove', (e) => {
+                if (!pointers.has(e.pointerId)) return;
+                pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+                if (pointers.size === 2) {
+                    const pts = Array.from(pointers.values());
+                    const dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+                    if (pinchStartDist > 0) {
+                        const cx = (pts[0].x + pts[1].x) / 2;
+                        const cy = (pts[0].y + pts[1].y) / 2;
+                        // Temporarily restore base zoom math: zoom relative to pinch start
+                        const target = pinchStartZoom * (dist / pinchStartDist);
+                        const clamped = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, target));
+                        if (clamped !== currentZoom) {
+                            const rect = main.getBoundingClientRect();
+                            const ccx = cx - (rect.left + rect.width / 2);
+                            const ccy = cy - (rect.top + rect.height / 2);
+                            const ratio = clamped / currentZoom;
+                            panX = ccx - (ccx - panX) * ratio;
+                            panY = ccy - (ccy - panY) * ratio;
+                            currentZoom = clamped;
+                            syncViewState();
+                            applyZoom();
+                        }
+                    }
+                    return;
+                }
+                if (pointers.size === 1 && main.classList.contains('dragging')) {
+                    panX = basePanX + (e.clientX - panStartX);
+                    panY = basePanY + (e.clientY - panStartY);
+                    syncViewState();
+                    applyZoom();
+                }
+            });
+
+            const endPointer = (e) => {
+                pointers.delete(e.pointerId);
+                if (pointers.size === 0) {
+                    main.classList.remove('dragging');
+                } else if (pointers.size === 1) {
+                    // Remaining finger becomes new pan anchor
+                    const pt = Array.from(pointers.values())[0];
+                    panStartX = pt.x;
+                    panStartY = pt.y;
+                    basePanX = panX;
+                    basePanY = panY;
+                }
+            };
+            main.addEventListener('pointerup', endPointer);
+            main.addEventListener('pointercancel', endPointer);
+
+            // Double-click resets zoom + pan
+            main.addEventListener('dblclick', () => resetZoom());
         }
 
         function navigate(dir) {
@@ -448,6 +678,7 @@ export class MarkdownDiagramsPanel {
         });
 
         // Robust triggering for Webview lifecycle
+        setupPanZoom();
         if (document.readyState === 'complete' || document.readyState === 'interactive') {
             initMermaid();
         } else {
