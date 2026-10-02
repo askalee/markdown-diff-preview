@@ -50,6 +50,9 @@ function isRelationLine(trimmed: string): boolean {
 
 const colonMemberPattern = /^([\w~<>,.\s$]+?)\s*:\s*(.+?)\s*$/;
 const emptyBlockPattern = /^class\s+([^\s{]+)\s*\{\s*\}\s*$/;
+// Statement keywords whose lines may contain `:` but are never members
+// (e.g. classDef fill:#..., click href "https://...").
+const statementKeywordPattern = /^(classDef|cssClass|style|click|link|note|direction|namespace|accTitle|accDescr|title|class)\b/;
 
 interface FilterState {
     braceDepth: number;
@@ -86,7 +89,7 @@ function handleBlockMember(raw: string, trimmed: string, level: ClassDiagramDeta
 
 // Returns true when the line was a `ClassName : member` line (handled).
 function handleColonMember(raw: string, trimmed: string, level: ClassDiagramDetail, state: FilterState): boolean {
-    if (isRelationLine(trimmed)) return false;
+    if (isRelationLine(trimmed) || statementKeywordPattern.test(trimmed)) return false;
     const match = trimmed.match(colonMemberPattern);
     if (!match) return false;
     if (level === 'minimal' || isMethodMember(match[2])) {

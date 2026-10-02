@@ -100,4 +100,32 @@ BankAccount : balance`;
         assert.strictEqual(filterClassDiagram('', 'minimal'), '');
         assert.strictEqual(filterClassDiagram('   ', 'compact'), '   ');
     });
+
+    test('minimal keeps classDef lines (colons in styles are not members)', () => {
+        const code = `classDiagram
+class Foo {
+  +bar()
+}
+classDef changed fill:#3a3220,stroke:#c9a227
+class Foo:::changed`;
+        const out = filterClassDiagram(code, 'minimal');
+        assert.ok(out.includes('classDef changed fill:#3a3220'), 'keeps classDef');
+        assert.ok(out.includes('class Foo:::changed'), 'keeps style suffix');
+    });
+
+    test('minimal keeps cssClass/click/note/style statements containing colons', () => {
+        const code = `classDiagram
+class Foo {
+  +bar()
+}
+cssClass "Foo" changed
+click Foo href "https://example.com/a:b" "tip"
+note for Foo "see https://example.com/x"
+style Foo fill:#f00`;
+        const out = filterClassDiagram(code, 'minimal');
+        assert.ok(out.includes('cssClass "Foo" changed'), 'keeps cssClass');
+        assert.ok(out.includes('click Foo href'), 'keeps click');
+        assert.ok(out.includes('note for Foo'), 'keeps note');
+        assert.ok(out.includes('style Foo fill:#f00'), 'keeps style');
+    });
 });
