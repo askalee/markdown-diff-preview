@@ -65,6 +65,31 @@ function generateHtml(content: string, fileName: string, addedCount: number, rem
             });
         });
 
+        // Word-level diff hover sync (Scheme C)
+        document.addEventListener('mouseover', (e) => {
+            const target = e.target;
+            if (!target || typeof target.closest !== 'function') return;
+            const wordEl = target.closest('[data-diff-pair]');
+            if (!wordEl) return;
+            const pairId = wordEl.getAttribute('data-diff-pair');
+            if (!pairId) return;
+            document.querySelectorAll('[data-diff-pair="' + pairId + '"]').forEach(el => {
+                el.classList.add('diff-word-focus');
+            });
+        });
+
+        document.addEventListener('mouseout', (e) => {
+            const target = e.target;
+            if (!target || typeof target.closest !== 'function') return;
+            const wordEl = target.closest('[data-diff-pair]');
+            if (!wordEl) return;
+            const pairId = wordEl.getAttribute('data-diff-pair');
+            if (!pairId) return;
+            document.querySelectorAll('[data-diff-pair="' + pairId + '"]').forEach(el => {
+                el.classList.remove('diff-word-focus');
+            });
+        });
+
         // Diff Navigation
         let currentDiffChunkIndex = -1;
         let diffHighlightTimeout = null;

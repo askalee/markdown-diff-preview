@@ -10,13 +10,15 @@ import {
     getCommentsForLine,
     getCommentStatus 
 } from './commentParser';
+import { computeIntraLineDiff, restoreWordDiffPlaceholders } from './intraLineDiff';
 
 export async function renderMarkdownWithDiff(
     markdown: string,
     diff: FileDiff | null,
     showLineNumbers: boolean,
     commentsData?: CommentsData | null,
-    resolveUrl?: (url: string) => string
+    resolveUrl?: (url: string) => string,
+    enableWordDiff: boolean = true
 ): Promise<string> {
     const lines = markdown.split('\n');
     const addedLines = diff?.addedLines || new Set<number>();
@@ -25,6 +27,32 @@ export async function renderMarkdownWithDiff(
     // Parse comments if not provided
     const comments = commentsData || parseCommentsData(markdown);
     const commentMarkers = extractCommentMarkersByLine(markdown);
+
+    const wordDiffPlaceholders: string[] = [];
+    const preparedRemovedLines = new Map<number, string>();
+    const preparedAddedLines = new Map<number, string>();
+
+    // Pre-calculate word-level diffs for replacement lines
+    if (enableWordDiff) {
+        for (let i = 0; i < lines.length; i++) {
+            const lineNumber = i + 1;
+            const isAdded = addedLines.has(lineNumber);
+            const removedContent = removedLines.get(lineNumber);
+
+            if (isAdded && removedContent && !removedContent.includes('\n')) {
+                const rawAddedLine = lines[i];
+                const diffRes = computeIntraLineDiff(removedContent, rawAddedLine, lineNumber);
+                if (diffRes.hasWordDiff) {
+                    const baseId = wordDiffPlaceholders.length;
+                    wordDiffPlaceholders.push(...diffRes.placeholders);
+                    const remappedOld = diffRes.oldLinePrepared.replace(/\x00WD(\d+)\x00/g, (_, id) => `\x00WD${baseId + parseInt(id, 10)}\x00`);
+                    const remappedNew = diffRes.newLinePrepared.replace(/\x00WD(\d+)\x00/g, (_, id) => `\x00WD${baseId + parseInt(id, 10)}\x00`);
+                    preparedRemovedLines.set(lineNumber, remappedOld);
+                    preparedAddedLines.set(lineNumber, remappedNew);
+                }
+            }
+        }
+    }
 
     let html = '';
     const commentThreadsHtml: string[] = []; // Collect comment threads to append at end
@@ -302,6 +330,9 @@ export async function renderMarkdownWithDiff(
             result = processInlineComments(result, originalLine, lineNumber);
         }
         
+        // Restore word-diff placeholders
+        result = restoreWordDiffPlaceholders(result, wordDiffPlaceholders);
+
         return result;
     };
 
@@ -367,7 +398,8 @@ export async function renderMarkdownWithDiff(
     };
 
     const renderRemovedBlock = (removedContent: string, lineNumber?: number): string => {
-        const removedLinesArr = removedContent.split('\n');
+        const contentToRender = (lineNumber ? preparedRemovedLines.get(lineNumber) : undefined) ?? removedContent;
+        const removedLinesArr = contentToRender.split('\n');
         let renderedRemoved = '';
         let inRemovedList = false;
         let removedListType: 'ul' | 'ol' = 'ul';
@@ -414,7 +446,8 @@ export async function renderMarkdownWithDiff(
 
     // Render removed list items inline within a list (not as a full-width block)
     const renderRemovedListItems = (removedContent: string, parentTag: 'ul' | 'ol', lineNumber?: number): string => {
-        const removedLinesArr = removedContent.split('\n');
+        const contentToRender = (lineNumber ? preparedRemovedLines.get(lineNumber) : undefined) ?? removedContent;
+        const removedLinesArr = contentToRender.split('\n');
         let result = '';
         const dataLineAttr = lineNumber ? ` data-line="${lineNumber}"` : '';
 
@@ -550,8 +583,9 @@ export async function renderMarkdownWithDiff(
             .filter((cell, idx, arr) => idx !== arr.length - 1 || cell !== '');
     };
 
-    const renderRemovedTableRows = (removedContent: string, columnCount: number): string => {
-        const removedLinesArr = removedContent.split('\n');
+    const renderRemovedTableRows = (removedContent: string, columnCount: number, lineNumber?: number): string => {
+        const contentToRender = (lineNumber ? preparedRemovedLines.get(lineNumber) : undefined) ?? removedContent;
+        const removedLinesArr = contentToRender.split('\n');
         let removedHtml = '';
         removedLinesArr.forEach(removedLine => {
             const trimmed = removedLine.trim();
@@ -605,7 +639,7 @@ export async function renderMarkdownWithDiff(
 
                 const removedContent = removedLines.get(lineNumber);
                 if (removedContent) {
-                    tableHtml += renderRemovedTableRows(removedContent, columnCount);
+                    tableHtml += renderRemovedTableRows(removedContent, columnCount, lineNumber);
                 }
 
                 const cells = parseTableCells(line);
@@ -697,8 +731,8 @@ export async function renderMarkdownWithDiff(
     let inCommentsDataBlock = false;
 
     for (let i = 0; i < lines.length; i++) {
-        const line = lines[i];
         const lineNumber = i + 1;
+        const line = preparedAddedLines.get(lineNumber) ?? lines[i];
 
         // Skip COMMENTS-DATA block (it's metadata, not content to render)
         // Check if this line starts a COMMENTS-DATA block
@@ -748,7 +782,9 @@ export async function renderMarkdownWithDiff(
                 codeLines.forEach((codeLine, idx) => {
                     const codeLineNum = codeBlockStartLine + 1 + idx;
                     const isAdded = addedLines.has(codeLineNum);
-                    const escapedLine = escapeHtml(codeLine);
+                    const lineToUse = preparedAddedLines.get(codeLineNum) ?? codeLine;
+                    let escapedLine = escapeHtml(lineToUse);
+                    escapedLine = restoreWordDiffPlaceholders(escapedLine, wordDiffPlaceholders);
                     if (isAdded) {
                         codeHtml += `<span class="diff-line added" data-line="${codeLineNum}">${escapedLine}</span>\n`;
                     } else {

@@ -602,6 +602,66 @@ li.diff-line.removed::marker {
     background: var(--diff-remove-gutter);
 }
 
+/* Word-level diff highlighting (Scheme A & Scheme C) */
+.diff-word {
+    display: inline;
+    border-radius: 3px;
+    padding: 1px 4px;
+    margin: 0 1px;
+    transition: all 0.15s ease;
+    cursor: default;
+}
+
+/* Dark theme (default) */
+.diff-word-removed {
+    background-color: rgba(248, 81, 73, 0.45);
+    color: #ffdcd7;
+    text-decoration: line-through;
+    border: 1px solid rgba(248, 81, 73, 0.6);
+}
+
+.diff-word-added {
+    background-color: rgba(46, 160, 67, 0.45);
+    color: #aff5b4;
+    border: 1px solid rgba(46, 160, 67, 0.6);
+}
+
+/* Light theme */
+body.vscode-light .diff-word-removed,
+body.theme-light .diff-word-removed {
+    background-color: rgba(255, 129, 130, 0.45);
+    color: #82071e;
+    border: 1px solid #cf222e;
+}
+
+body.vscode-light .diff-word-added,
+body.theme-light .diff-word-added {
+    background-color: rgba(46, 160, 67, 0.35);
+    color: #116329;
+    border: 1px solid #1a7f37;
+}
+
+/* High contrast theme */
+body.vscode-high-contrast .diff-word-removed {
+    background-color: rgba(255, 0, 0, 0.5);
+    color: #ffffff;
+    border: 1px solid #ff0000;
+}
+
+body.vscode-high-contrast .diff-word-added {
+    background-color: rgba(0, 255, 0, 0.5);
+    color: #ffffff;
+    border: 1px solid #00ff00;
+}
+
+/* Interactive Hover Focus (Scheme C) */
+.diff-word-focus {
+    box-shadow: 0 0 0 2px var(--accent-blue) !important;
+    position: relative;
+    z-index: 5;
+    border-radius: 3px;
+}
+
 /* New file banner */
 .new-file-banner {
     background: linear-gradient(135deg, rgba(46, 160, 67, 0.1), rgba(46, 160, 67, 0.05));

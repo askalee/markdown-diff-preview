@@ -27,6 +27,19 @@ export interface FileDiff {
     removedLines: Map<number, string>;  // Maps new line position to removed content
 }
 
+export interface WordDiffToken {
+    type: 'added' | 'removed' | 'unchanged';
+    value: string;
+    pairId?: string;
+}
+
+export interface IntraLineDiffResult {
+    hasWordDiff: boolean;
+    oldLinePrepared: string;
+    newLinePrepared: string;
+    placeholders: string[];
+}
+
 /**
  * Comment system types for markdown comments
  */

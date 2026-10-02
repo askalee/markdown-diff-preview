@@ -129,6 +129,11 @@
           ],
           "default": "both",
           "description": "How to display diff highlights"
+        },
+        "markdownDiffPreview.enableWordDiff": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable word-level diff highlighting for modified lines"
         }
       }
     }

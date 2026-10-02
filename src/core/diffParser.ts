@@ -33,7 +33,8 @@ export function parseDiff(filePath: string, diffOutput: string): FileDiff {
     let pendingRemovals: string[] = [];
     let removalInsertPoint = 0;
 
-    for (const line of lines) {
+    for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
         // Parse hunk header: @@ -oldStart,oldLines +newStart,newLines @@
         const hunkMatch = line.match(/^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/);
         
@@ -94,7 +95,24 @@ export function parseDiff(filePath: string, diffOutput: string): FileDiff {
                 
                 // If we had pending removals, attach them before this addition
                 if (pendingRemovals.length > 0) {
-                    removedLines.set(removalInsertPoint, pendingRemovals.join('\n'));
+                    // Check if consecutive additions match consecutive removals for 1:1 line pairing
+                    let consecutiveAdditions = 0;
+                    for (let k = i; k < lines.length; k++) {
+                        const l = lines[k];
+                        if (l.startsWith('+') && !l.startsWith('+++')) {
+                            consecutiveAdditions++;
+                        } else {
+                            break;
+                        }
+                    }
+
+                    if (pendingRemovals.length > 1 && pendingRemovals.length === consecutiveAdditions) {
+                        for (let rIdx = 0; rIdx < pendingRemovals.length; rIdx++) {
+                            removedLines.set(newLineNumber + rIdx, pendingRemovals[rIdx]);
+                        }
+                    } else {
+                        removedLines.set(removalInsertPoint, pendingRemovals.join('\n'));
+                    }
                     pendingRemovals = [];
                 }
                 removalInsertPoint = newLineNumber + 1;

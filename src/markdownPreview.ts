@@ -468,6 +468,7 @@ export class MarkdownDiffPreviewPanel {
         const showLineNumbers = config.get<boolean>('showLineNumbers', true);
         const highlightStyle = config.get<string>('highlightStyle', 'both');
         const diffBase = config.get<string>('diffBase', 'HEAD');
+        const enableWordDiff = config.get<boolean>('enableWordDiff', true);
 
         const markdownContent = document.getText();
         const commentsData = parseCommentsData(markdownContent);
@@ -490,7 +491,7 @@ export class MarkdownDiffPreviewPanel {
             }
         };
 
-        const renderedContent = await renderMarkdownWithDiff(markdownContent, diff, showLineNumbers, commentsData, resolveUrl);
+        const renderedContent = await renderMarkdownWithDiff(markdownContent, diff, showLineNumbers, commentsData, resolveUrl, enableWordDiff);
 
         const addedCount = diff?.addedLines.size || 0;
         const removedCount = diff?.removedLines.size || 0;
@@ -737,6 +738,31 @@ export class MarkdownDiffPreviewPanel {
                 updateCommentNavState();
             }
             initDiffNav();
+        });
+
+        // Word-level diff hover sync (Scheme C)
+        document.addEventListener('mouseover', (e) => {
+            const target = e.target;
+            if (!target || typeof target.closest !== 'function') return;
+            const wordEl = target.closest('[data-diff-pair]');
+            if (!wordEl) return;
+            const pairId = wordEl.getAttribute('data-diff-pair');
+            if (!pairId) return;
+            document.querySelectorAll('[data-diff-pair="' + pairId + '"]').forEach(el => {
+                el.classList.add('diff-word-focus');
+            });
+        });
+
+        document.addEventListener('mouseout', (e) => {
+            const target = e.target;
+            if (!target || typeof target.closest !== 'function') return;
+            const wordEl = target.closest('[data-diff-pair]');
+            if (!wordEl) return;
+            const pairId = wordEl.getAttribute('data-diff-pair');
+            if (!pairId) return;
+            document.querySelectorAll('[data-diff-pair="' + pairId + '"]').forEach(el => {
+                el.classList.remove('diff-word-focus');
+            });
         });
 
         // ==========================================
