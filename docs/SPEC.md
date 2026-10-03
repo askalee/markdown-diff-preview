@@ -33,6 +33,8 @@ As a document author, I want the Preview to reflect my typing in real time, so I
 
 ## US-03 Line-Level Git Diff Highlighting
 
+> Scope note: this US applies in Diff view mode only (see US-15). In Normal mode the same document renders without any diff chrome.
+
 As a user reviewing document changes, I want to see added/removed lines directly on the rendered output, so I can grasp differences at a glance.
 
 ### AC
@@ -48,6 +50,8 @@ As a user reviewing document changes, I want to see added/removed lines directly
 ---
 
 ## US-04 Word-Level (Intra-Line) Diff
+
+> Scope note: diff mode only (see US-15); Normal mode never emits `diff-word` markup.
 
 As a user editing wording inside a sentence, I want to see exactly which words changed within a line instead of the whole line being marked as added, so I can review precisely.
 
@@ -87,6 +91,8 @@ As a user comparing the preview with the source, I want to click a line in the p
 ---
 
 ## US-07 Navigate Between Diff Chunks
+
+> Scope note: diff mode only (see US-15). In Normal mode the nav bar is hidden (no chunks exist).
 
 As a user reviewing long documents, I want to jump through diff chunks one by one and know which one I am looking at, so I can go through all changes systematically.
 
@@ -204,3 +210,17 @@ As a user, I want settings to adjust the diff base and display options, so the e
 - Opening the Preview for languages other than Markdown is not supported.
 - Diff display is not supported on VS Code below 1.85.0, or in environments without Git installed / on PATH (plain preview only).
 - Exporting the Preview to a file is not provided.
+
+---
+
+## US-15 Preview View Mode (Normal / Diff)
+
+As a user, I want to switch the Preview between Normal mode (current Markdown as-is) and Diff mode (git highlighting), defaulting to Normal, so I can read clean output and only show diffs when reviewing.
+
+### AC
+
+- [ ] AC-01: A newly opened Preview defaults to Normal mode: body carries `view-mode-normal`, the `Normal` toggle button is `active`, content renders as with `diff == null` (no `diff-line` / `diff-removed-block` / `diff-word` / `diff-row-*` / `diff-table-wrapper` / `has-diff`), while `data-line` is retained so click-to-navigate and selection sync still work.
+- [ ] AC-02: The header shows a `Normal | Diff` segmented toggle (`view-mode-toggle`, `switchViewMode()`); the commands `Toggle Normal/Diff Mode`, `Show Normal Mode`, `Show Diff Mode` do the same. Switching re-renders the same document in the new mode.
+- [ ] AC-03: The mode persists per panel session (extension `_viewMode` memory): typing updates, manual refresh, `.git/**` events, `onDidChangeViewState` refresh, and file switches keep the current mode; the webview mirrors it via `getState()/setState()` so a webview reload restores the UI. A brand-new panel always starts in Normal.
+- [ ] AC-04: Diff mode restores the previous behaviour exactly: `view-mode-diff` body class, `+N added` / `−N removed` stats, `vs <diffBase>`, Prev/Next nav with counter, removed blocks, word diff, and the new-file banner; panel title gains a `• Diff` suffix.
+- [ ] AC-05: Normal mode hides diff-only chrome: no stats, no `vs <diffBase>`, nav bar hidden, no new-file banner, no `has-diff` on Mermaid containers; Mermaid diagrams, comments, in-preview editing, and relative-path images keep working.

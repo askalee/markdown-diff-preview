@@ -846,6 +846,39 @@ body.vscode-high-contrast .diff-word-added {
     }
 }
 
+/* View Mode Toggle (Normal / Diff) */
+.view-mode-toggle {
+    display: inline-flex;
+    align-items: center;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 2px;
+    gap: 2px;
+}
+
+.view-mode-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    padding: 4px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 500;
+    transition: all 0.15s ease;
+    user-select: none;
+}
+
+.view-mode-btn:hover {
+    color: var(--text-primary);
+}
+
+.view-mode-btn.active {
+    background: var(--accent-blue);
+    color: #ffffff;
+}
+
 /* Responsive adjustment for small / split screens */
 @media (max-width: 650px) {
     .header {

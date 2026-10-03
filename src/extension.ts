@@ -54,6 +54,27 @@ export function activate(context: vscode.ExtensionContext) {
         }
     );
 
+    const toggleViewModeCommand = vscode.commands.registerCommand(
+        'markdownDiffPreview.toggleViewMode',
+        () => {
+            MarkdownDiffPreviewPanel.toggleViewMode();
+        }
+    );
+
+    const showNormalModeCommand = vscode.commands.registerCommand(
+        'markdownDiffPreview.showNormalMode',
+        () => {
+            MarkdownDiffPreviewPanel.setViewMode('normal');
+        }
+    );
+
+    const showDiffModeCommand = vscode.commands.registerCommand(
+        'markdownDiffPreview.showDiffMode',
+        () => {
+            MarkdownDiffPreviewPanel.setViewMode('diff');
+        }
+    );
+
     // Auto-update preview when document changes
     const onDocumentChange = vscode.workspace.onDidChangeTextDocument((e) => {
         if (e.document.languageId === 'markdown') {
@@ -87,6 +108,9 @@ export function activate(context: vscode.ExtensionContext) {
         refreshCommand,
         nextDiffCommand,
         prevDiffCommand,
+        toggleViewModeCommand,
+        showNormalModeCommand,
+        showDiffModeCommand,
         onDocumentChange,
         onActiveEditorChange,
         onConfigChange,

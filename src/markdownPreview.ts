@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import { getGitDiff, getGitBranch, getGitStatus, FileDiff } from './gitDiff';
 import { renderMarkdownWithDiff } from './core/markdownRenderer';
+import { DEFAULT_VIEW_MODE, ViewMode, isViewMode, resolveEffectiveDiff, shouldShowDiffChrome } from './core/viewMode';
 import { parseCommentsData } from './core/commentParser';
 import { MarkdownDiagramsPanel } from './markdownDiagramsPanel';
 
@@ -12,6 +13,7 @@ export class MarkdownDiffPreviewPanel {
     private readonly _panel: vscode.WebviewPanel;
     private readonly _extensionUri: vscode.Uri;
     private _document: vscode.TextDocument | undefined;
+    private _viewMode: ViewMode = DEFAULT_VIEW_MODE;
     private _disposables: vscode.Disposable[] = [];
 
     public static createOrShow(extensionUri: vscode.Uri, document: vscode.TextDocument) {
@@ -60,6 +62,26 @@ export class MarkdownDiffPreviewPanel {
                 command: 'navigateDiff',
                 direction: direction
             });
+        }
+    }
+
+    public static getViewMode(): ViewMode {
+        return MarkdownDiffPreviewPanel.currentPanel?._viewMode ?? DEFAULT_VIEW_MODE;
+    }
+
+    public static setViewMode(mode: ViewMode) {
+        if (MarkdownDiffPreviewPanel.currentPanel) {
+            if (MarkdownDiffPreviewPanel.currentPanel._viewMode !== mode) {
+                MarkdownDiffPreviewPanel.currentPanel._viewMode = mode;
+                MarkdownDiffPreviewPanel.currentPanel._update();
+            }
+        }
+    }
+
+    public static toggleViewMode() {
+        if (MarkdownDiffPreviewPanel.currentPanel) {
+            const next: ViewMode = MarkdownDiffPreviewPanel.currentPanel._viewMode === 'normal' ? 'diff' : 'normal';
+            MarkdownDiffPreviewPanel.setViewMode(next);
         }
     }
 
@@ -116,6 +138,12 @@ export class MarkdownDiffPreviewPanel {
                     case 'openDiagramsView':
                         if (this._document) {
                             MarkdownDiagramsPanel.createOrShow(this._extensionUri, this._document, message.index ?? 0);
+                        }
+                        break;
+                    case 'setViewMode':
+                        if (isViewMode(message.mode)) {
+                            this._viewMode = message.mode;
+                            this._update();
                         }
                         break;
                 }
@@ -455,7 +483,7 @@ export class MarkdownDiffPreviewPanel {
         const branch = await getGitBranch(this._document);
         const status = await getGitStatus(this._document);
 
-        this._panel.title = `📝 ${this._document.fileName.split('/').pop()}`;
+        this._panel.title = `📝 ${this._document.fileName.split('/').pop()}${this._viewMode === 'diff' ? ' • Diff' : ''}`;
         this._panel.webview.html = await this._getHtmlForWebview(
             this._document,
             diff,
@@ -498,10 +526,12 @@ export class MarkdownDiffPreviewPanel {
             }
         };
 
-        const renderedContent = await renderMarkdownWithDiff(markdownContent, diff, showLineNumbers, commentsData, resolveUrl, enableWordDiff);
+        const effectiveDiff = resolveEffectiveDiff(this._viewMode, diff);
+        const renderedContent = await renderMarkdownWithDiff(markdownContent, effectiveDiff, showLineNumbers, commentsData, resolveUrl, enableWordDiff);
 
-        const addedCount = diff?.addedLines.size || 0;
-        const removedCount = diff?.removedLines.size || 0;
+        const showDiffChrome = shouldShowDiffChrome(this._viewMode);
+        const addedCount = effectiveDiff?.addedLines.size || 0;
+        const removedCount = effectiveDiff?.removedLines.size || 0;
 
         // Get URI for the external stylesheet and mermaid script
         const stylesUri = this._panel.webview.asWebviewUri(
@@ -521,7 +551,7 @@ export class MarkdownDiffPreviewPanel {
     <link rel="stylesheet" href="${stylesUri}">
     <script src="${mermaidUri}"></script>
 </head>
-<body>
+<body class="view-mode-${this._viewMode}">
     <div class="header">
         <div class="header-left">
             <span class="file-name">${document.fileName.split('/').pop()}</span>
@@ -531,10 +561,14 @@ export class MarkdownDiffPreviewPanel {
             </div>
         </div>
         <div class="diff-stats">
-            ${addedCount > 0 ? `<span class="stat additions">+${addedCount} added</span>` : ''}
-            ${removedCount > 0 ? `<span class="stat deletions">−${removedCount} removed</span>` : ''}
-            <span class="diff-base">vs ${diffBase}</span>
-            <div class="diff-nav" id="diff-nav">
+            <div class="view-mode-toggle" role="tablist" aria-label="Preview view mode">
+                <button class="view-mode-btn${this._viewMode === 'normal' ? ' active' : ''}" id="view-mode-normal-btn" onclick="switchViewMode('normal')" title="Show current Markdown only" aria-label="Normal mode">Normal</button>
+                <button class="view-mode-btn${this._viewMode === 'diff' ? ' active' : ''}" id="view-mode-diff-btn" onclick="switchViewMode('diff')" title="Show git diff highlighting" aria-label="Diff mode">Diff</button>
+            </div>
+            ${showDiffChrome && addedCount > 0 ? `<span class="stat additions">+${addedCount} added</span>` : ''}
+            ${showDiffChrome && removedCount > 0 ? `<span class="stat deletions">−${removedCount} removed</span>` : ''}
+            ${showDiffChrome ? `<span class="diff-base">vs ${diffBase}</span>` : ''}
+            <div class="diff-nav" id="diff-nav"${showDiffChrome ? '' : ' style="display:none;"'}>
                 <button class="diff-nav-btn" id="diff-prev-btn" onclick="navigateDiff('prev')" title="Previous Diff (Alt+Up, P, [)" aria-label="Previous diff">
                     <span class="nav-arrow">▲</span> Prev
                 </button>
@@ -551,7 +585,7 @@ export class MarkdownDiffPreviewPanel {
     </div>
 
     <div class="content">
-        ${diff?.isNew ? `
+        ${effectiveDiff?.isNew ? `
             <div class="new-file-banner">
                 <span class="icon">✨</span>
                 <span class="text">This is a new file — all content shown as additions</span>
@@ -563,6 +597,35 @@ export class MarkdownDiffPreviewPanel {
 
     <script>
         const vscode = acquireVsCodeApi();
+        window.initialViewMode = '${this._viewMode}';
+
+        function switchViewMode(mode) {
+            if (mode !== 'normal' && mode !== 'diff') return;
+            try {
+                const prevState = vscode.getState() || {};
+                vscode.setState({ ...prevState, viewMode: mode });
+            } catch (e) {
+                console.warn('[md-preview] setState failed:', e);
+            }
+            vscode.postMessage({ command: 'setViewMode', mode: mode });
+        }
+
+        window.switchViewMode = switchViewMode;
+
+        // Session-memory restore (option A): if the webview reloaded while the
+        // extension panel kept a different mode, sync the extension to the
+        // persisted webview state. New panels default to normal via the extension.
+        try {
+            const persistedViewMode = vscode.getState()?.viewMode;
+            if ((persistedViewMode === 'normal' || persistedViewMode === 'diff') &&
+                persistedViewMode !== window.initialViewMode) {
+                vscode.postMessage({ command: 'setViewMode', mode: persistedViewMode });
+            } else if (!vscode.getState()?.viewMode) {
+                vscode.setState({ ...(vscode.getState() || {}), viewMode: window.initialViewMode });
+            }
+        } catch (e) {
+            console.warn('[md-preview] getState failed:', e);
+        }
 
         function scrollToLine(line) {
             vscode.postMessage({
