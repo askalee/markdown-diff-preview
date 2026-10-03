@@ -11,6 +11,7 @@ import {
     ACTOR_HEADER_SELECTOR,
     DIAGRAM_HIGHLIGHT_CLASS,
 } from './core/diagramHighlight';
+import { decideDiagramsOpen } from './core/diagramsOpen';
 
 interface ParsedDiagram {
     index: number;
@@ -30,29 +31,46 @@ export class MarkdownDiagramsPanel {
     private _currentIndex: number = 0;
 
     public static createOrShow(extensionUri: vscode.Uri, document: vscode.TextDocument, initialIndex: number = 0) {
-        const column = vscode.ViewColumn.Beside;
+        const existing = MarkdownDiagramsPanel.currentPanel;
+        if (!existing) {
+            // First open: Beside lands in a new rightmost group and focuses the
+            // Diagrams panel without covering the Preview (verified in VS Code).
+            const fileName = path.basename(document.fileName);
+            const panel = vscode.window.createWebviewPanel(
+                MarkdownDiagramsPanel.viewType,
+                `📊 Diagrams: ${fileName}`,
+                vscode.ViewColumn.Beside,
+                {
+                    enableScripts: true,
+                    retainContextWhenHidden: true,
+                    localResourceRoots: [extensionUri]
+                }
+            );
 
-        if (MarkdownDiagramsPanel.currentPanel) {
-            MarkdownDiagramsPanel.currentPanel._panel.reveal(column);
-            MarkdownDiagramsPanel.currentPanel._document = document;
-            MarkdownDiagramsPanel.currentPanel._currentIndex = initialIndex;
-            MarkdownDiagramsPanel.currentPanel._update();
+            MarkdownDiagramsPanel.currentPanel = new MarkdownDiagramsPanel(panel, extensionUri, document, initialIndex);
             return;
         }
 
-        const fileName = path.basename(document.fileName);
-        const panel = vscode.window.createWebviewPanel(
-            MarkdownDiagramsPanel.viewType,
-            `📊 Diagrams: ${fileName}`,
-            column,
-            {
-                enableScripts: true,
-                retainContextWhenHidden: true,
-                localResourceRoots: [extensionUri]
-            }
-        );
-
-        MarkdownDiagramsPanel.currentPanel = new MarkdownDiagramsPanel(panel, extensionUri, document, initialIndex);
+        // Never pass a column to reveal(): reveal(Beside) moves the panel into
+        // the Preview's group and covers it; reveal() with no args stays put.
+        // Never rebuild webview.html for the same diagram: the reload destroys
+        // focused content and drops zoom/pan/selection state.
+        const action = decideDiagramsOpen({
+            hasPanel: true,
+            sameDocument: existing._document.uri.toString() === document.uri.toString(),
+            sameIndex: existing._currentIndex === initialIndex,
+            panelActive: existing._panel.active,
+        });
+        if (action === 'noop') return;
+        if (action === 'reveal-rebuild') {
+            existing._document = document;
+            existing._currentIndex = initialIndex;
+            existing._update();
+        } else if (action === 'reveal-select') {
+            existing._currentIndex = initialIndex;
+            void existing._panel.webview.postMessage({ command: 'showDiagram', index: initialIndex });
+        }
+        existing._panel.reveal();
     }
 
     public static updateIfVisible(document: vscode.TextDocument) {
@@ -868,6 +886,15 @@ export class MarkdownDiagramsPanel {
             } else if (e.key === 'ArrowRight') {
                 e.preventDefault();
                 navigate('next');
+            }
+        });
+
+        // In-place diagram switch requested by the extension (Open in View on
+        // another diagram): no HTML rebuild, so zoom/pan/selection survive.
+        window.addEventListener('message', (event) => {
+            const msg = event.data;
+            if (msg && msg.command === 'showDiagram' && typeof msg.index === 'number') {
+                selectTab(msg.index);
             }
         });
 

@@ -4,6 +4,7 @@ import { getGitDiff, getGitBranch, getGitStatus, FileDiff } from './gitDiff';
 import { renderMarkdownWithDiff } from './core/markdownRenderer';
 import { DEFAULT_VIEW_MODE, ViewMode, isViewMode, resolveEffectiveDiff, shouldShowDiffChrome } from './core/viewMode';
 import { parseCommentsData } from './core/commentParser';
+import { resolveNavigationLine, NON_NAVIGABLE_SELECTOR } from './core/clickNavigation';
 import { MarkdownDiagramsPanel } from './markdownDiagramsPanel';
 
 export class MarkdownDiffPreviewPanel {
@@ -597,6 +598,8 @@ export class MarkdownDiffPreviewPanel {
 
     <script>
         const vscode = acquireVsCodeApi();
+        const NON_NAVIGABLE_SELECTOR = ${JSON.stringify(NON_NAVIGABLE_SELECTOR)};
+        const resolveNavigationLine = ${resolveNavigationLine.toString()};
         window.initialViewMode = '${this._viewMode}';
 
         function switchViewMode(mode) {
@@ -1357,15 +1360,14 @@ export class MarkdownDiffPreviewPanel {
             return null;
         }
 
-        // Single click handler for navigation
+        // Single click handler for navigation (ignores buttons/links/inputs
+        // inside [data-line] blocks, e.g. mermaid Open in View / Code toggles,
+        // so control clicks never yank focus to the editor via scrollToLine)
         document.querySelector('.content').addEventListener('click', (e) => {
             if (isEditing) return;
-            
-            const lineEl = e.target.closest('[data-line]');
-            if (lineEl) {
-                const line = parseInt(lineEl.dataset.line);
-                if (line) scrollToLine(line);
-            }
+
+            const line = resolveNavigationLine(e.target);
+            if (line) scrollToLine(line);
         });
 
         // Double click handler for editing
