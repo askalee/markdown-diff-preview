@@ -1774,3 +1774,39 @@ body.diagrams-view-body {
     color: var(--text-muted);
 }
 
+/* Cross-diagram class / lane highlight (Diagrams view only) */
+.diagrams-viewport g.node[id^="classId-"],
+.diagrams-viewport rect.actor,
+.diagrams-viewport g.actor-man,
+.diagrams-viewport text.actor {
+    cursor: pointer;
+}
+
+.diagrams-viewport g.node.diagram-highlight {
+    filter: drop-shadow(0 0 8px rgba(88, 166, 255, 0.8));
+}
+
+.diagrams-viewport g.node.diagram-highlight .label-container path {
+    stroke: var(--accent-blue) !important;
+    stroke-width: 3px !important;
+}
+
+.diagrams-viewport rect.actor.diagram-highlight {
+    stroke: var(--accent-blue) !important;
+    stroke-width: 3px !important;
+    filter: drop-shadow(0 0 6px rgba(88, 166, 255, 0.8));
+}
+
+.diagrams-viewport g.actor-man.diagram-highlight {
+    filter: drop-shadow(0 0 6px rgba(88, 166, 255, 0.8));
+}
+
+.diagrams-viewport g.actor-man.diagram-highlight circle,
+.diagrams-viewport g.actor-man.diagram-highlight line {
+    stroke: var(--accent-blue) !important;
+}
+
+.diagrams-viewport text.actor.diagram-highlight {
+    font-weight: 700 !important;
+}
+

@@ -2,6 +2,15 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import { extractMermaidTitle } from './core/markdownRenderer';
 import { ClassDiagramDetail, filterClassDiagram } from './core/classDiagramDetail';
+import {
+    normalizeDiagramName,
+    isSameDiagramName,
+    extractClassIdName,
+    isDragMovement,
+    CLASS_NODE_SELECTOR,
+    ACTOR_HEADER_SELECTOR,
+    DIAGRAM_HIGHLIGHT_CLASS,
+} from './core/diagramHighlight';
 
 interface ParsedDiagram {
     index: number;
@@ -186,6 +195,10 @@ export class MarkdownDiagramsPanel {
         );
 
         const safeDiagramsJson = JSON.stringify(diagrams).replace(/</g, '\\u003c');
+        const normalizeSrc = normalizeDiagramName.toString();
+        const isSameSrc = isSameDiagramName.toString();
+        const extractIdSrc = extractClassIdName.toString();
+        const isDragSrc = isDragMovement.toString();
 
         return `<!DOCTYPE html>
 <html lang="en">
@@ -270,6 +283,15 @@ export class MarkdownDiagramsPanel {
         const classDetail = '${detailLevel}';
         const renderedSvgs = {};
         const viewStates = {};
+        const normalizeDiagramName = ${normalizeSrc};
+        const isSameDiagramName = ${isSameSrc};
+        const extractClassIdName = ${extractIdSrc};
+        const isDragMovement = ${isDragSrc};
+        const CLASS_NODE_SELECTOR = '${CLASS_NODE_SELECTOR}';
+        const ACTOR_HEADER_SELECTOR = '${ACTOR_HEADER_SELECTOR}';
+        const HIGHLIGHT_CLASS = '${DIAGRAM_HIGHLIGHT_CLASS}';
+        let selectedName = null;
+        let selectedNormalized = null;
 
         function getViewState(index) {
             if (!viewStates[index]) {
@@ -484,6 +506,116 @@ export class MarkdownDiagramsPanel {
             });
         }
 
+        function classNodeName(node) {
+            if (!node) return '';
+            const label = node.querySelector('.nodeLabel');
+            if (label && label.textContent && label.textContent.trim() !== '') {
+                return label.textContent;
+            }
+            return extractClassIdName(node.getAttribute('id') || '') || '';
+        }
+
+        function actorHeaderName(el) {
+            if (!el) return '';
+            const tag = (el.tagName || '').toLowerCase();
+            if (tag === 'text') return el.textContent || '';
+            if (el.classList && el.classList.contains('actor-man')) {
+                const t = el.querySelector('text');
+                if (t && t.textContent && t.textContent.trim() !== '') return t.textContent;
+                return el.getAttribute('name') || '';
+            }
+            const parent = el.parentElement;
+            const sib = parent ? parent.querySelector('text') : null;
+            if (sib && sib.textContent && sib.textContent.trim() !== '') return sib.textContent;
+            return el.getAttribute('name') || '';
+        }
+
+        function resolveClickedName(target) {
+            if (!target || !target.closest) return null;
+            const classNode = target.closest(CLASS_NODE_SELECTOR);
+            if (classNode) {
+                const name = classNodeName(classNode);
+                return name && normalizeDiagramName(name) ? name : null;
+            }
+            const seq = target.closest(ACTOR_HEADER_SELECTOR);
+            if (seq) {
+                const name = actorHeaderName(seq);
+                return name && normalizeDiagramName(name) ? name : null;
+            }
+            return null;
+        }
+
+        function applyHighlight() {
+            const viewport = document.getElementById('diagrams-viewport');
+            if (!viewport) return;
+            viewport.querySelectorAll('.' + HIGHLIGHT_CLASS).forEach((el) => {
+                el.classList.remove(HIGHLIGHT_CLASS);
+            });
+            if (!selectedNormalized) return;
+            viewport.querySelectorAll(CLASS_NODE_SELECTOR).forEach((node) => {
+                if (isSameDiagramName(classNodeName(node), selectedName)) {
+                    node.classList.add(HIGHLIGHT_CLASS);
+                }
+            });
+            viewport.querySelectorAll(ACTOR_HEADER_SELECTOR).forEach((el) => {
+                if (isSameDiagramName(actorHeaderName(el), selectedName)) {
+                    el.classList.add(HIGHLIGHT_CLASS);
+                }
+            });
+        }
+
+        function setSelected(name) {
+            if (!name || !normalizeDiagramName(name)) {
+                selectedName = null;
+                selectedNormalized = null;
+            } else {
+                const norm = normalizeDiagramName(name);
+                if (selectedNormalized === norm) {
+                    selectedName = null;
+                    selectedNormalized = null;
+                } else {
+                    selectedName = name;
+                    selectedNormalized = norm;
+                }
+            }
+            applyHighlight();
+        }
+
+        function clearSelection() {
+            if (!selectedNormalized) return;
+            selectedName = null;
+            selectedNormalized = null;
+            applyHighlight();
+        }
+
+        function setupHighlight() {
+            // NOTE: the click listener must live on #diagrams-view-main, not the
+            // viewport. setupPanZoom calls setPointerCapture on pointerdown, which
+            // retargets the subsequent click to the capture element (main); a
+            // listener on the viewport (a child of main) would never fire.
+            // The real element under the cursor is recovered geometrically via
+            // elementFromPoint, which is unaffected by pointer capture.
+            const main = document.getElementById('diagrams-view-main');
+            if (!main || main.dataset.highlightBound === '1') return;
+            main.dataset.highlightBound = '1';
+            let downX = 0;
+            let downY = 0;
+            main.addEventListener('pointerdown', (e) => {
+                downX = e.clientX;
+                downY = e.clientY;
+            });
+            main.addEventListener('click', (e) => {
+                if (isDragMovement(downX, downY, e.clientX, e.clientY)) return; // was a pan drag, not a click
+                const under = document.elementFromPoint(e.clientX, e.clientY) || e.target;
+                const name = resolveClickedName(under);
+                if (name) {
+                    setSelected(name);
+                } else {
+                    clearSelection();
+                }
+            });
+        }
+
         async function selectTab(index) {
             if (index < 0 || index >= rawDiagrams.length) return;
             if (index !== currentIndex) {
@@ -509,6 +641,7 @@ export class MarkdownDiagramsPanel {
                 const svg = await renderDiagram(index);
                 viewport.innerHTML = svg;
                 collapseEmptyClassBoxes(viewport);
+                applyHighlight();
             }
 
             if (hasViewState(index)) {
@@ -727,7 +860,9 @@ export class MarkdownDiagramsPanel {
         }
 
         document.addEventListener('keydown', (e) => {
-            if (e.key === 'ArrowLeft') {
+            if (e.key === 'Escape') {
+                clearSelection();
+            } else if (e.key === 'ArrowLeft') {
                 e.preventDefault();
                 navigate('prev');
             } else if (e.key === 'ArrowRight') {
@@ -738,6 +873,7 @@ export class MarkdownDiagramsPanel {
 
         // Robust triggering for Webview lifecycle
         setupPanZoom();
+        setupHighlight();
         if (document.readyState === 'complete' || document.readyState === 'interactive') {
             initMermaid();
         } else {
