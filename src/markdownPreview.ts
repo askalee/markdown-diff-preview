@@ -70,6 +70,10 @@ export class MarkdownDiffPreviewPanel {
         return MarkdownDiffPreviewPanel.currentPanel?._viewMode ?? DEFAULT_VIEW_MODE;
     }
 
+    public static get currentDocumentUri(): string | undefined {
+        return MarkdownDiffPreviewPanel.currentPanel?._document?.uri.toString();
+    }
+
     public static setViewMode(mode: ViewMode) {
         if (MarkdownDiffPreviewPanel.currentPanel) {
             if (MarkdownDiffPreviewPanel.currentPanel._viewMode !== mode) {

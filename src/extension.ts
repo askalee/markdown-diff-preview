@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { MarkdownDiffPreviewPanel } from './markdownPreview';
 import { MarkdownDiagramsPanel } from './markdownDiagramsPanel';
+import { shouldClosePreviewOnRemove } from './core/previewLifecycle';
 
 export function activate(context: vscode.ExtensionContext) {
     console.log('Markdown Diff Preview is now active!');
@@ -102,6 +103,23 @@ export function activate(context: vscode.ExtensionContext) {
         MarkdownDiffPreviewPanel.refresh();
     });
 
+    // Auto-close both panels when the tracked file is removed from disk.
+    // Tab close alone must not close them; rename oldUri counts as removal.
+    const closePanelsIfTrackedFileRemoved = (removedUris: readonly string[]) => {
+        if (shouldClosePreviewOnRemove(MarkdownDiffPreviewPanel.currentDocumentUri, removedUris)) {
+            MarkdownDiffPreviewPanel.dispose();
+        }
+        if (shouldClosePreviewOnRemove(MarkdownDiagramsPanel.currentDocumentUri, removedUris)) {
+            MarkdownDiagramsPanel.currentPanel?.dispose();
+        }
+    };
+    const onFileDelete = vscode.workspace.onDidDeleteFiles((e) => {
+        closePanelsIfTrackedFileRemoved(e.files.map((f) => f.toString()));
+    });
+    const onFileRename = vscode.workspace.onDidRenameFiles((e) => {
+        closePanelsIfTrackedFileRemoved(e.files.map((f) => f.oldUri.toString()));
+    });
+
     context.subscriptions.push(
         openPreviewCommand,
         openDiagramsCommand,
@@ -114,6 +132,8 @@ export function activate(context: vscode.ExtensionContext) {
         onDocumentChange,
         onActiveEditorChange,
         onConfigChange,
+        onFileDelete,
+        onFileRename,
         gitWatcher
     );
 }

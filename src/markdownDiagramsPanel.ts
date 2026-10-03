@@ -84,6 +84,10 @@ export class MarkdownDiagramsPanel {
         MarkdownDiagramsPanel.currentPanel?._update();
     }
 
+    public static get currentDocumentUri(): string | undefined {
+        return MarkdownDiagramsPanel.currentPanel?._document.uri.toString();
+    }
+
     public static getConfiguredDetail(): ClassDiagramDetail {
         const value = vscode.workspace.getConfiguration('markdownDiffPreview').get<string>('classDiagramDetail');
         return value === 'minimal' || value === 'compact' ? value : 'full';

@@ -118,6 +118,7 @@ As a user, I want a sensible preview in edge states (new file, no modifications,
 - [ ] AC-02: When there is no diff against `diffBase` and no unstaged changes either, plain Markdown is shown with no markers, no banner, and no error.
 - [ ] AC-03: When the file is outside the workspace or git commands fail (non-git repo, git missing from PATH), the Preview still shows the Markdown body (`diff == null`) without crashing.
 - [ ] AC-04: Removed content positioned after the last line (`removedLines.get(lines.length + 1)`) is shown at the very end of the document.
+- [ ] AC-05: When the Markdown file tracked by an open Preview or Diagrams panel is deleted from disk (or renamed away, via `onDidDeleteFiles` / `onDidRenameFiles` old URI), both panels close automatically; closing the editor tab alone does not close them.
 
 ---
 
