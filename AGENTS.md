@@ -2,13 +2,14 @@
 
 ## 1. Test-First Principle (Mandatory, No Exceptions)
 
-1. Always test-first: any code change (new feature, bug fix, refactor, misc change) must start with a failing test, then implementation: Red -> Green -> Refactor, no exceptions.
+1. Test-first is mandatory for every code change, including new features, bug fixes, refactors, and other updates. Write a failing test before implementation and follow the Red → Green → Refactor workflow without exception. This is not limited to strict baby-step TDD; the goal is to capture the requirement or reproduce the bug with a test, implement the minimal fix, and then refine the code as needed.
 2. Test location: `test/*.test.ts`, using the Node test runner + `ts-node/register`.
 3. Naming mirrors the module under test, e.g. `src/gitDiff.ts` -> `test/gitDiff.test.ts`, or feature-based names such as `intraLineDiff.test.ts`.
 4. No implementation without a failing test that proves the requirement or reproduces the problem.
 5. Implement with the minimal change that makes the test pass; do not write large amounts of untested code at once.
 
 Verification commands:
+
 - `npm test`
 - `npm run compile`
 - `npm run lint`
