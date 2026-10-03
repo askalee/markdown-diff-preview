@@ -5,6 +5,18 @@ All notable changes to the "Markdown Diff Preview" extension will be documented 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.2] - 2026-10-03
+
+### Fixed
+
+- Diagrams view header overlap root cause: tab bar used `flex: 1` (basis 0%) so it collapsed to ~0px under the controls; now uses content-based basis so controls wrap to the next row, plus ellipsis truncation for overlong tab titles
+
+## [1.2.1] - 2026-10-03
+
+### Fixed
+
+- Diagrams view header no longer overlaps tabs and controls on narrow widths: tabs wrap onto multiple lines, controls drop to a second row and wrap internally
+
 ## [1.2.0] - 2026-10-03
 
 ### Added

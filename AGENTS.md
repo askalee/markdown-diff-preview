@@ -38,6 +38,7 @@ After every Green and before closing, run one code smell scan:
 - [ ] `npm run compile` + `npm run lint` report no errors
 - [ ] Code smell check completed with necessary refactors done
 - [ ] `docs/SPEC.md` updated if behavior changed, otherwise confirmed N/A
+- [ ] UI/layout changes verified by self-rendered screenshots (see §6), otherwise confirmed N/A
 
 ## 5. Spec Sync (Mandatory)
 
@@ -45,3 +46,13 @@ After every Green and before closing, run one code smell scan:
 2. Any behavior change (new feature, behavior tweak, bug fix that changes observable behavior, settings change, edge-case handling change) must update `docs/SPEC.md` in the same change: add / update the corresponding US + AC, keep Non-Goals accurate.
 3. Pure refactor / internal cleanup with no observable behavior change needs no SPEC update.
 4. SPEC update is part of Green, not a follow-up.
+
+## 6. Visual Verification by Self-Rendering (Mandatory for UI Changes)
+
+Do not judge layout/CSS fixes by reasoning alone. Any change affecting rendered output (webview HTML, CSS, header/panel layout) must be verified by actually rendering it and looking at the result before claiming it is fixed:
+
+1. Reproduce faithfully: build a standalone HTML page using the real `media/styles.css` plus the real markup from the panel code (`src/markdownPreview.ts` / `src/markdownDiagramsPanel.ts`), with representative content (e.g. long CJK tab titles, full button groups). Verify the stylesheet actually loaded (e.g. check `body` margin is `0`, not the browser default `8px`).
+2. Render headlessly: `google-chrome --headless --disable-gpu --no-sandbox --window-size=<W>,300 --screenshot=<file>.png <page>.html`. Cover multiple widths, including narrow ones the bug report shows (e.g. 500 / 540 / 700 / 1000).
+3. Measure objectively: inject a script that dumps `getBoundingClientRect()` of the relevant elements and assert no overlap (e.g. write results to `document.title` and read them via `--dump-dom`).
+4. Look with your own eyes: read the screenshot image yourself and confirm the layout matches the requirement.
+5. Re-verify after every CSS revision; a "theoretically correct" fix that still overlaps on screen is not done.

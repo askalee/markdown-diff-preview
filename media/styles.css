@@ -1579,10 +1579,11 @@ body.diagrams-view-body {
     display: flex;
     align-items: center;
     justify-content: space-between;
+    flex-wrap: wrap;
     background: var(--bg-secondary);
     border-bottom: 1px solid var(--border-color);
     padding: 8px 16px;
-    gap: 16px;
+    gap: 8px 16px;
     min-height: 48px;
     flex-shrink: 0;
 }
@@ -1590,11 +1591,11 @@ body.diagrams-view-body {
 .diagrams-tab-bar {
     display: flex;
     align-items: center;
+    flex-wrap: wrap;
     gap: 6px;
-    overflow-x: auto;
-    flex: 1;
+    flex: 1 1 auto;
+    min-width: 0;
     padding-bottom: 2px;
-    scrollbar-width: thin;
 }
 
 .diagrams-tab {
@@ -1607,6 +1608,7 @@ body.diagrams-view-body {
     font-size: 13px;
     font-weight: 500;
     white-space: nowrap;
+    max-width: 100%;
     display: inline-flex;
     align-items: center;
     gap: 6px;
@@ -1630,13 +1632,21 @@ body.diagrams-view-body {
 .diagrams-tab .tab-number {
     opacity: 0.8;
     font-size: 11px;
+    flex-shrink: 0;
+}
+
+.diagrams-tab .tab-title {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .diagrams-view-actions {
     display: flex;
     align-items: center;
+    flex-wrap: wrap;
     gap: 6px;
-    flex-shrink: 0;
+    min-width: 0;
 }
 
 .diagrams-ctrl-btn {
