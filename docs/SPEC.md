@@ -133,6 +133,7 @@ As a user drawing flowcharts in documents, I want Mermaid code blocks to render 
 - [ ] AC-03: When I click the `</> Code` button I can toggle between "diagram / source"; clicking `⧉ Open in View` opens that diagram in the standalone Diagrams view (see US-10).
 - [ ] AC-04: A Mermaid syntax error shows `⚠️ Mermaid Syntax Error` + the error message instead of a blank area; a Mermaid library load failure shows a library-not-loaded error message.
 - [ ] AC-05: A mermaid block containing a diff carries `has-diff` on its container; when its start line is added it is additionally wrapped in `diff-line added`.
+- [ ] AC-06: A diagram requesting the ELK layout (`%%{init: {"layout": "elk"}}%%`, e.g. `stateDiagram-v2`) renders with the ELK engine instead of an `Unknown layout algorithm: elk` error; the vendored `media/mermaid.min.js` bundles `@mermaid-js/layout-elk` and registers it at load (rebuild via `npm run build:mermaid`).
 
 ---
 
