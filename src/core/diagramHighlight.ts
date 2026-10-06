@@ -5,7 +5,7 @@
  */
 
 /** Selector for clickable class nodes in Mermaid classDiagram SVG output. */
-export const CLASS_NODE_SELECTOR = 'g.node[id^="classId-"]';
+export const CLASS_NODE_SELECTOR = 'g.node[id*="classId-"]';
 
 /** Selectors for lane headers in Mermaid sequenceDiagram SVG output. */
 export const ACTOR_HEADER_SELECTOR = 'rect.actor, g.actor-man, text.actor';
@@ -35,10 +35,10 @@ export function isSameDiagramName(a: string, b: string): boolean {
     return left.length > 0 && left === right;
 }
 
-/** Parse `classId-<Name>-<index>` into `<Name>`; null when not a class id. */
+/** Parse `<renderId>-classId-<Name>-<index>` (or legacy `classId-<Name>-<index>`) into `<Name>`; null when not a class id. */
 export function extractClassIdName(idAttr: string): string | null {
     if (!idAttr) return null;
-    const match = idAttr.match(/^classId-(.+)-(\d+)$/);
+    const match = idAttr.match(/classId-(.+)-(\d+)$/);
     return match ? match[1] : null;
 }
 

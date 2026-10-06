@@ -7,6 +7,7 @@ import {
     isSameDiagramName,
     extractClassIdName,
     isDragMovement,
+    CLASS_NODE_SELECTOR,
 } from '../src/core/diagramHighlight';
 
 describe('diagramHighlight normalize', () => {
@@ -87,10 +88,45 @@ describe('diagramHighlight styles', () => {
         const css = readFileSync(join(__dirname, '..', 'media', 'styles.css'), 'utf-8');
         assert.ok(css.includes('.diagram-highlight'), 'must define .diagram-highlight rules');
         assert.ok(
-            css.includes('g.node[id^="classId-"]'),
+            css.includes('g.node[id*="classId-"]'),
             'class nodes must have clickable/highlight rules',
         );
         assert.ok(css.includes('rect.actor'), 'sequence lane headers must have rules');
+    });
+});
+
+describe('diagramHighlight renderId-prefixed ids (mermaid 11 regression)', () => {
+    test('CLASS_NODE_SELECTOR matches renderId-prefixed class node ids', () => {
+        // mermaid >= 11 prefixes node ids with the render id, e.g.
+        // `diagram-panel-svg-0-1717334400000-classId-Order-0`.
+        // A ^= (starts-with) selector never matches those, which broke
+        // click highlight after the ELK bundle upgrade.
+        assert.ok(
+            CLASS_NODE_SELECTOR.includes('*='),
+            `selector must use substring match, got: ${CLASS_NODE_SELECTOR}`,
+        );
+        assert.ok(
+            !CLASS_NODE_SELECTOR.includes('^='),
+            `selector must not use starts-with match, got: ${CLASS_NODE_SELECTOR}`,
+        );
+    });
+
+    test('extractClassIdName parses renderId-prefixed ids', () => {
+        assert.strictEqual(
+            extractClassIdName('diagram-panel-svg-0-1717334400000-classId-Order-0'),
+            'Order',
+        );
+        assert.strictEqual(extractClassIdName('test-svg-classId-User-1'), 'User');
+        // legacy unprefixed ids keep working
+        assert.strictEqual(extractClassIdName('classId-Order-0'), 'Order');
+    });
+
+    test('styles.css clickable rule matches renderId-prefixed class nodes', () => {
+        const css = readFileSync(join(__dirname, '..', 'media', 'styles.css'), 'utf-8');
+        assert.ok(
+            css.includes('g.node[id*="classId-"]'),
+            'clickable rule must use substring match for renderId-prefixed ids',
+        );
     });
 });
 

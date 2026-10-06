@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Class diagram click highlight broken after mermaid 11 upgrade: node ids now carry a renderId prefix (`<renderId>-classId-<Name>-<N>`), so the `^=` selector never matched; selector and `extractClassIdName` now use substring matching
+
 ### Added
 
 - ELK layout support for Mermaid diagrams: `media/mermaid.min.js` now bundles `@mermaid-js/layout-elk` (mermaid 11.17.2) and registers it at load, so `%%{init: {"layout": "elk"}}%%` diagrams (e.g. `stateDiagram-v2`) render instead of failing with `Unknown layout algorithm: elk`; rebuild with `npm run build:mermaid`

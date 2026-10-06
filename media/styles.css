@@ -1775,7 +1775,7 @@ body.diagrams-view-body {
 }
 
 /* Cross-diagram class / lane highlight (Diagrams view only) */
-.diagrams-viewport g.node[id^="classId-"],
+.diagrams-viewport g.node[id*="classId-"],
 .diagrams-viewport rect.actor,
 .diagrams-viewport g.actor-man,
 .diagrams-viewport text.actor {
