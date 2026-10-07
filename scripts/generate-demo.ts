@@ -21,6 +21,7 @@ function generateHtml(content: string, fileName: string, addedCount: number, rem
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Markdown Diff Preview - ${fileName}</title>
     <link rel="stylesheet" href="../media/styles.css">
+    <link rel="stylesheet" href="../media/katex.min.css">
     <script src="../media/mermaid.min.js"></script>
 </head>
 <body>

@@ -509,6 +509,7 @@ export class MarkdownDiffPreviewPanel {
         const highlightStyle = config.get<string>('highlightStyle', 'both');
         const diffBase = config.get<string>('diffBase', 'HEAD');
         const enableWordDiff = config.get<boolean>('enableWordDiff', true);
+        const enableMath = config.get<boolean>('enableMath', true);
 
         const markdownContent = document.getText();
         const commentsData = parseCommentsData(markdownContent);
@@ -532,7 +533,7 @@ export class MarkdownDiffPreviewPanel {
         };
 
         const effectiveDiff = resolveEffectiveDiff(this._viewMode, diff);
-        const renderedContent = await renderMarkdownWithDiff(markdownContent, effectiveDiff, showLineNumbers, commentsData, resolveUrl, enableWordDiff);
+        const renderedContent = await renderMarkdownWithDiff(markdownContent, effectiveDiff, showLineNumbers, commentsData, resolveUrl, enableWordDiff, enableMath);
 
         const showDiffChrome = shouldShowDiffChrome(this._viewMode);
         const addedCount = effectiveDiff?.addedLines.size || 0;
@@ -541,6 +542,9 @@ export class MarkdownDiffPreviewPanel {
         // Get URI for the external stylesheet and mermaid script
         const stylesUri = this._panel.webview.asWebviewUri(
             vscode.Uri.joinPath(this._extensionUri, 'media', 'styles.css')
+        );
+        const katexUri = this._panel.webview.asWebviewUri(
+            vscode.Uri.joinPath(this._extensionUri, 'media', 'katex.min.css')
         );
         const mermaidUri = this._panel.webview.asWebviewUri(
             vscode.Uri.joinPath(this._extensionUri, 'media', 'mermaid.min.js')
@@ -554,6 +558,7 @@ export class MarkdownDiffPreviewPanel {
     <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${this._panel.webview.cspSource} 'unsafe-inline'; script-src 'unsafe-inline' 'unsafe-eval' ${this._panel.webview.cspSource}; font-src ${this._panel.webview.cspSource} data:; img-src ${this._panel.webview.cspSource} https: data: blob:; connect-src ${this._panel.webview.cspSource} https:;">
     <title>Markdown Diff Preview</title>
     <link rel="stylesheet" href="${stylesUri}">
+    <link rel="stylesheet" href="${katexUri}">
     <script src="${mermaidUri}"></script>
 </head>
 <body class="view-mode-${this._viewMode}">
@@ -1289,6 +1294,12 @@ export class MarkdownDiffPreviewPanel {
 
         // Find the smallest editable element from a click target
         function findEditableElement(target) {
+            // KaTeX output is never directly editable: its textContent mixes
+            // MathML annotations with visual text, so write-back would corrupt
+            // the TeX source. Edit the markdown source instead.
+            if (target.closest?.('.katex, .math-error')) {
+                return null;
+            }
             // These are the atomic editable elements
             const editableTags = ['STRONG', 'EM', 'DEL', 'CODE', 'A', 'TD', 'TH'];
             

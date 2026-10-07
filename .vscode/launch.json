@@ -8,7 +8,8 @@
             "args": [
                 "--extensionDevelopmentPath=${workspaceFolder}",
                 "--disable-extensions",
-                "${workspaceFolder}/demo/diagrams_demo.md"
+                "${workspaceFolder}/demo/diagrams_demo.md",
+                "${workspaceFolder}/demo/math_demo.md"
             ],
             "outFiles": [
                 "${workspaceFolder}/out/**/*.js"
@@ -22,7 +23,8 @@
             "args": [
                 "--extensionDevelopmentPath=${workspaceFolder}",
                 "--disable-extensions",
-                "${workspaceFolder}/demo/diagrams_demo.md"
+                "${workspaceFolder}/demo/diagrams_demo.md",
+                "${workspaceFolder}/demo/math_demo.md"
             ],
             "outFiles": [
                 "${workspaceFolder}/out/**/*.js"
@@ -36,7 +38,8 @@
             "args": [
                 "--extensionDevelopmentPath=${workspaceFolder}",
                 "--disable-extensions",
-                "${workspaceFolder}/demo/diagrams_demo.md"
+                "${workspaceFolder}/demo/diagrams_demo.md",
+                "${workspaceFolder}/demo/math_demo.md"
             ],
             "outFiles": [
                 "${workspaceFolder}/out/**/*.js"

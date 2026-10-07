@@ -11,6 +11,13 @@ import {
     getCommentStatus 
 } from './commentParser';
 import { computeIntraLineDiff, restoreWordDiffPlaceholders } from './intraLineDiff';
+import {
+    stashInlineCode,
+    restoreCodePlaceholders,
+    stashInlineMath,
+    restoreMathPlaceholders,
+    renderDisplayBlock
+} from './math';
 
 export function extractMermaidTitle(code: string, index: number): string {
     const trimmed = code.trim();
@@ -64,7 +71,8 @@ export async function renderMarkdownWithDiff(
     showLineNumbers: boolean,
     commentsData?: CommentsData | null,
     resolveUrl?: (url: string) => string,
-    enableWordDiff: boolean = true
+    enableWordDiff: boolean = true,
+    enableMath: boolean = true
 ): Promise<string> {
     const lines = markdown.split('\n');
     const addedLines = diff?.addedLines || new Set<number>();
@@ -87,6 +95,11 @@ export async function renderMarkdownWithDiff(
 
             if (isAdded && removedContent && !removedContent.includes('\n')) {
                 const rawAddedLine = lines[i];
+                // Math lines render as a whole: skip word-diff inside TeX so
+                // \x00 word markers never leak into katex input.
+                if (enableMath && (rawAddedLine.includes('$') || rawAddedLine.includes('\\(') || rawAddedLine.includes('\\['))) {
+                    continue;
+                }
                 const diffRes = computeIntraLineDiff(removedContent, rawAddedLine, lineNumber);
                 if (diffRes.hasWordDiff) {
                     const baseId = wordDiffPlaceholders.length;
@@ -335,6 +348,15 @@ export async function renderMarkdownWithDiff(
     const parseInline = (text: string, originalLine?: string, lineNumber?: number): string => {
         // Remove comment markers BEFORE escaping (they're HTML comments, not content)
         let cleanedText = text.replace(/<!--comment:\d+-->/g, '');
+
+        // Stash inline code and math on RAW text so `$` inside backticks is
+        // never math, and `_`/`*`/`\` inside TeX is never formatting.
+        const codeStash: string[] = [];
+        const mathStash: string[] = [];
+        if (enableMath) {
+            cleanedText = stashInlineCode(cleanedText, codeStash);
+            cleanedText = stashInlineMath(cleanedText, mathStash);
+        }
         let result = escapeHtml(cleanedText);
 
         // Extract images and links into placeholders BEFORE applying italic/bold so
@@ -366,8 +388,11 @@ export async function renderMarkdownWithDiff(
         // Apply character-level formatting only to the non-tag text
         result = applyCharFormatting(result);
 
-        // Restore stashed images/links
+        // Restore stashed images/links (and inline code when math is on)
         result = result.replace(/\x00PH(\d+)\x00/g, (_, id) => placeholders[parseInt(id, 10)]);
+        if (enableMath) {
+            result = restoreCodePlaceholders(result, codeStash);
+        }
         
         // Wrap plain text segments (between tags) in spans for atomic editing
         result = wrapPlainTextSegments(result);
@@ -379,6 +404,11 @@ export async function renderMarkdownWithDiff(
         
         // Restore word-diff placeholders
         result = restoreWordDiffPlaceholders(result, wordDiffPlaceholders);
+
+        // Restore math last so KaTeX HTML is never wrapped in plain-text spans
+        if (enableMath) {
+            result = restoreMathPlaceholders(result, mathStash);
+        }
 
         return result;
     };
@@ -777,6 +807,49 @@ export async function renderMarkdownWithDiff(
     // Track if we're inside COMMENTS-DATA block
     let inCommentsDataBlock = false;
 
+    /**
+     * Try to parse a display-math block starting at lines[idx] (raw text).
+     * Supports multi-line `$$...$$`, `\[...\]` and single-line variants.
+     * Returns the TeX plus the 1-based end line, or null when the line is
+     * not a display-math block (or the fence never closes).
+     */
+    const tryParseDisplayMath = (rawLines: string[], idx: number): { tex: string; endLine: number } | null => {
+        if (!enableMath) {
+            return null;
+        }
+        const trimmed = rawLines[idx].trim();
+
+        const findMultilineEnd = (closeFence: string): { tex: string; endLine: number } | null => {
+            const texLines: string[] = [];
+            for (let j = idx + 1; j < rawLines.length; j++) {
+                const t = rawLines[j].trim();
+                if (t === closeFence) {
+                    return { tex: texLines.join('\n'), endLine: j + 1 };
+                }
+                if (t.endsWith(closeFence)) {
+                    texLines.push(rawLines[j].slice(0, rawLines[j].lastIndexOf(closeFence)));
+                    return { tex: texLines.join('\n'), endLine: j + 1 };
+                }
+                texLines.push(rawLines[j]);
+            }
+            return null;
+        };
+
+        if (trimmed === '$$') {
+            return findMultilineEnd('$$');
+        }
+        if (trimmed.startsWith('$$') && trimmed.endsWith('$$') && trimmed.length > 4) {
+            return { tex: trimmed.slice(2, -2), endLine: idx + 1 };
+        }
+        if (trimmed === '\\[') {
+            return findMultilineEnd('\\]');
+        }
+        if (trimmed.startsWith('\\[') && trimmed.endsWith('\\]') && trimmed.length > 4) {
+            return { tex: trimmed.slice(2, -2), endLine: idx + 1 };
+        }
+        return null;
+    };
+
     for (let i = 0; i < lines.length; i++) {
         const lineNumber = i + 1;
         const line = preparedAddedLines.get(lineNumber) ?? lines[i];
@@ -898,6 +971,39 @@ export async function renderMarkdownWithDiff(
         if (inCodeBlock) {
             codeBlockContent += (codeBlockContent ? '\n' : '') + line;
             continue;
+        }
+
+        // Display math blocks (multi-line $$...$$ / \[...\] and single-line variants)
+        if (enableMath) {
+            const mathBlock = tryParseDisplayMath(lines, i);
+            if (mathBlock) {
+                flushList();
+                flushTable();
+                const removedContent = removedLines.get(lineNumber);
+                if (removedContent) {
+                    html += renderRemovedBlock(removedContent, lineNumber);
+                }
+                const container = renderDisplayBlock(mathBlock.tex, lineNumber);
+                let blockHasAdded = false;
+                for (let k = lineNumber; k <= mathBlock.endLine; k++) {
+                    if (addedLines.has(k)) {
+                        blockHasAdded = true;
+                        break;
+                    }
+                }
+                // Mirror mermaid handling: wrap only when the anchor line is
+                // added; the container already carries data-line itself.
+                if (addedLines.has(lineNumber)) {
+                    html += wrapWithDiff(container, lineNumber, true);
+                } else if (blockHasAdded) {
+                    const lineNumHtml = showLineNumbers ? `<span class="line-number">${lineNumber}</span>` : '';
+                    html += `<div class="diff-line added clickable" data-line="${lineNumber}">${lineNumHtml}${container}</div>`;
+                } else {
+                    html += container;
+                }
+                i = mathBlock.endLine - 1;
+                continue;
+            }
         }
 
         // Empty line

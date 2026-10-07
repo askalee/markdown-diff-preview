@@ -209,6 +209,21 @@ As a user, I want settings to adjust the diff base and display options, so the e
 - [ ] AC-03: `markdownDiffPreview.highlightStyle` (default `both`, only `inline` / `gutter` / `both` allowed): how diff highlights are displayed.
 - [ ] AC-04: `markdownDiffPreview.enableWordDiff` (default `true`): whether word-level diff is enabled (see US-04).
 - [ ] AC-05: `markdownDiffPreview.classDiagramDetail` (default `full`, only `minimal` / `compact` / `full` allowed): how much detail class diagrams show in the Diagrams view (see US-10 AC-08).
+- [ ] AC-06: `markdownDiffPreview.enableMath` (default `true`): whether LaTeX math is rendered with KaTeX (see US-16).
+
+---
+
+## US-16 LaTeX Math Rendering (KaTeX)
+
+As a user writing technical documents, I want LaTeX math to render as typeset formulas directly in the Preview, so I can verify equations without leaving VS Code.
+
+### AC
+
+- [ ] AC-01: Inline `$...$` and `\(...\)` render via KaTeX (`math-inline` + `katex` classes); display blocks `$$...$$` (single-line or fenced multi-line) and `\[...\]` render centered (`math-display` + `katex-display`), e.g. `$$ M=\sum_{i=1}^{n}p_iq_i,\qquad T=M+F $$`.
+- [ ] AC-02: Currency is never rendered as math: a lone `$10` stays literal, `\$` escapes to `$`, and pure-numeric `$...$` pairs are rejected; math inside fenced code blocks and inline `` ` `` code stays source text.
+- [ ] AC-03: Invalid TeX shows a visible `math-error` fallback with the original source instead of a blank area; KaTeX assets (`media/katex.min.css` + `media/fonts/`) are vendored locally with no CDN (offline-safe, satisfies the webview CSP).
+- [ ] AC-04: Math keeps working with diff chrome (added-line wrapper + `data-line` retained), click-to-navigate, and comments; KaTeX output is excluded from in-preview double-click editing so write-back can never corrupt the TeX source; math lines get line-level diff only (no word-diff markup inside TeX).
+- [ ] AC-05: When `markdownDiffPreview.enableMath == false`, no `katex` / `math-error` markup is produced and `$` text renders literally.
 
 ---
 

@@ -16,6 +16,7 @@ A VS Code extension that shows a beautiful Markdown preview with **git diff high
 - **Auto-refresh** — Updates when the document or git state changes
 - **Dark Theme** — Beautiful GitHub-inspired dark mode design
 - **Click to Navigate** — Click on diff lines to jump to that line in the editor
+- **LaTeX Math** — Inline `$...$` and display `$$...$$` formulas rendered with KaTeX (offline, no CDN)
 
 ## Installation
 
@@ -53,6 +54,7 @@ The preview will show your rendered Markdown with:
 | `markdownDiffPreview.diffBase` | `HEAD` | Git ref to compare against (e.g., `HEAD`, `main`, `origin/main`) |
 | `markdownDiffPreview.showLineNumbers` | `true` | Show line numbers on hover |
 | `markdownDiffPreview.highlightStyle` | `both` | How to display diff highlights: `inline`, `gutter`, or `both` |
+| `markdownDiffPreview.enableMath` | `true` | Render LaTeX math (`$...$`, `$$...$$`) with KaTeX |
 
 ## How It Works
 

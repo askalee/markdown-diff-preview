@@ -5,7 +5,7 @@ All notable changes to the "Markdown Diff Preview" extension will be documented 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.3.0] - 2026-10-07
 
 ### Fixed
 
@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - ELK layout support for Mermaid diagrams: `media/mermaid.min.js` now bundles `@mermaid-js/layout-elk` (mermaid 11.17.2) and registers it at load, so `%%{init: {"layout": "elk"}}%%` diagrams (e.g. `stateDiagram-v2`) render instead of failing with `Unknown layout algorithm: elk`; rebuild with `npm run build:mermaid`
+- LaTeX math rendering with KaTeX (offline, vendored `media/katex.min.css` + `media/fonts/`): inline `$...$` / `\\(...\\)`, display `$$...$$` / `\\[...\\]`; currency (`$10`), `\\$` escapes, and code blocks never render as math; invalid TeX shows a visible `math-error` fallback; new `markdownDiffPreview.enableMath` setting (default `true`)
 
 ## [1.2.4] - 2026-10-07
 
