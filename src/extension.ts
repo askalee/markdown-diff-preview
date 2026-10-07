@@ -1,6 +1,5 @@
 import * as vscode from 'vscode';
 import { MarkdownDiffPreviewPanel } from './markdownPreview';
-import { MarkdownDiagramsPanel } from './markdownDiagramsPanel';
 import { shouldClosePreviewOnRemove } from './core/previewLifecycle';
 
 export function activate(context: vscode.ExtensionContext) {
@@ -19,13 +18,19 @@ export function activate(context: vscode.ExtensionContext) {
         }
     );
 
-    // Register the open diagrams view command
+    // Register the open diagrams view command (single-panel mode: the
+    // diagrams pane lives inside the preview panel, so this only ensures
+    // the preview exists and switches its right-hand pane in place).
     const openDiagramsCommand = vscode.commands.registerCommand(
         'markdownDiffPreview.openDiagramsView',
         () => {
             const editor = vscode.window.activeTextEditor;
-            if (editor && editor.document.languageId === 'markdown') {
-                MarkdownDiagramsPanel.createOrShow(context.extensionUri, editor.document);
+            const existing = MarkdownDiffPreviewPanel.currentPanel;
+            if (existing) {
+                MarkdownDiffPreviewPanel.showDiagram(0);
+            } else if (editor && editor.document.languageId === 'markdown') {
+                MarkdownDiffPreviewPanel.createOrShow(context.extensionUri, editor.document);
+                MarkdownDiffPreviewPanel.showDiagram(0);
             } else {
                 vscode.window.showWarningMessage('Please open a Markdown file first');
             }
@@ -80,13 +85,12 @@ export function activate(context: vscode.ExtensionContext) {
     const onDocumentChange = vscode.workspace.onDidChangeTextDocument((e) => {
         if (e.document.languageId === 'markdown') {
             MarkdownDiffPreviewPanel.updateIfVisible(e.document);
-            MarkdownDiagramsPanel.updateIfVisible(e.document);
         }
     });
 
     const onConfigChange = vscode.workspace.onDidChangeConfiguration((e) => {
         if (e.affectsConfiguration('markdownDiffPreview.classDiagramDetail')) {
-            MarkdownDiagramsPanel.refresh();
+            MarkdownDiffPreviewPanel.refresh();
         }
     });
 
@@ -103,14 +107,11 @@ export function activate(context: vscode.ExtensionContext) {
         MarkdownDiffPreviewPanel.refresh();
     });
 
-    // Auto-close both panels when the tracked file is removed from disk.
-    // Tab close alone must not close them; rename oldUri counts as removal.
+    // Auto-close the panel when the tracked file is removed from disk.
+    // Tab close alone must not close it; rename oldUri counts as removal.
     const closePanelsIfTrackedFileRemoved = (removedUris: readonly string[]) => {
         if (shouldClosePreviewOnRemove(MarkdownDiffPreviewPanel.currentDocumentUri, removedUris)) {
             MarkdownDiffPreviewPanel.dispose();
-        }
-        if (shouldClosePreviewOnRemove(MarkdownDiagramsPanel.currentDocumentUri, removedUris)) {
-            MarkdownDiagramsPanel.currentPanel?.dispose();
         }
     };
     const onFileDelete = vscode.workspace.onDidDeleteFiles((e) => {
@@ -140,7 +141,4 @@ export function activate(context: vscode.ExtensionContext) {
 
 export function deactivate() {
     MarkdownDiffPreviewPanel.dispose();
-    if (MarkdownDiagramsPanel.currentPanel) {
-        MarkdownDiagramsPanel.currentPanel.dispose();
-    }
 }

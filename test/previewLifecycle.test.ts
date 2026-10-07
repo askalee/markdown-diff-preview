@@ -50,7 +50,7 @@ describe('shouldClosePreviewOnRemove', () => {
 describe('preview auto-close wiring', () => {
     const extensionSrc = readFileSync(join(__dirname, '..', 'src', 'extension.ts'), 'utf-8');
     const previewSrc = readFileSync(join(__dirname, '..', 'src', 'markdownPreview.ts'), 'utf-8');
-    const diagramsSrc = readFileSync(join(__dirname, '..', 'src', 'markdownDiagramsPanel.ts'), 'utf-8');
+    const legacyShimSrc = readFileSync(join(__dirname, '..', 'src', 'markdownDiagramsPanel.ts'), 'utf-8');
 
     test('extension subscribes to file deletion', () => {
         assert.ok(
@@ -66,25 +66,21 @@ describe('preview auto-close wiring', () => {
         );
     });
 
-    test('both panels expose their tracked document URI', () => {
+    test('preview exposes its tracked document URI (legacy shim forwards it)', () => {
         assert.ok(
             previewSrc.includes('currentDocumentUri'),
             'preview panel must expose currentDocumentUri',
         );
         assert.ok(
-            diagramsSrc.includes('currentDocumentUri'),
-            'diagrams panel must expose currentDocumentUri',
+            legacyShimSrc.includes('currentDocumentUri'),
+            'legacy diagrams shim must forward currentDocumentUri',
         );
     });
 
-    test('both panels are closed on removal', () => {
+    test('tracked panel is closed on removal (single panel)', () => {
         assert.ok(
             extensionSrc.includes('MarkdownDiffPreviewPanel.dispose'),
             'deleted file must close the Preview panel',
-        );
-        assert.ok(
-            extensionSrc.includes('MarkdownDiagramsPanel'),
-            'deleted file must also close the Diagrams panel',
         );
     });
 });

@@ -41,10 +41,10 @@ describe('decideDiagramsOpen', () => {
     });
 });
 
-describe('diagramsOpen webview wiring', () => {
-    test('webview handles showDiagram message with in-place tab switch', () => {
+describe('diagramsOpen webview wiring (single-panel mode)', () => {
+    test('preview handles showDiagram message with in-place tab switch', () => {
         const panel = readFileSync(
-            join(__dirname, '..', 'src', 'markdownDiagramsPanel.ts'),
+            join(__dirname, '..', 'src', 'markdownPreview.ts'),
             'utf-8',
         );
         assert.ok(
@@ -52,19 +52,19 @@ describe('diagramsOpen webview wiring', () => {
             'panel must support in-place diagram switching via message',
         );
         assert.ok(
-            panel.includes("addEventListener('message'"),
-            'webview must listen for extension messages',
+            panel.includes('split-container'),
+            'single panel must embed the diagrams split pane',
         );
     });
 
-    test('existing panel is never moved across groups (no column passed to reveal)', () => {
+    test('legacy diagrams module never creates its own webview panel', () => {
         const panel = readFileSync(
             join(__dirname, '..', 'src', 'markdownDiagramsPanel.ts'),
             'utf-8',
         );
         assert.ok(
-            !panel.includes('.reveal(column)'),
-            'reveal() must not move the panel into the Preview group (verified: reveal(Beside) covers Preview)',
+            !panel.includes('createWebviewPanel'),
+            'legacy shim must not create a webview (deprecated forwarder only)',
         );
     });
 });

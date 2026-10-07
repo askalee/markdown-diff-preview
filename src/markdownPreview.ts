@@ -5,7 +5,9 @@ import { renderMarkdownWithDiff } from './core/markdownRenderer';
 import { DEFAULT_VIEW_MODE, ViewMode, isViewMode, resolveEffectiveDiff, shouldShowDiffChrome } from './core/viewMode';
 import { parseCommentsData } from './core/commentParser';
 import { resolveNavigationLine, NON_NAVIGABLE_SELECTOR } from './core/clickNavigation';
-import { MarkdownDiagramsPanel } from './markdownDiagramsPanel';
+import { extractDiagrams } from './core/extractDiagrams';
+import { filterClassDiagram } from './core/classDiagramDetail';
+import { buildDiagramsSplitPaneHtml } from './splitDiagramsPane';
 
 export class MarkdownDiffPreviewPanel {
     public static currentPanel: MarkdownDiffPreviewPanel | undefined;
@@ -15,6 +17,7 @@ export class MarkdownDiffPreviewPanel {
     private readonly _extensionUri: vscode.Uri;
     private _document: vscode.TextDocument | undefined;
     private _viewMode: ViewMode = DEFAULT_VIEW_MODE;
+    private _diagramsIndex: number = 0;
     private _disposables: vscode.Disposable[] = [];
 
     public static createOrShow(extensionUri: vscode.Uri, document: vscode.TextDocument) {
@@ -72,6 +75,14 @@ export class MarkdownDiffPreviewPanel {
 
     public static get currentDocumentUri(): string | undefined {
         return MarkdownDiffPreviewPanel.currentPanel?._document?.uri.toString();
+    }
+
+    public static showDiagram(index: number = 0) {
+        const current = MarkdownDiffPreviewPanel.currentPanel;
+        if (!current) return;
+        current._diagramsIndex = Math.max(0, index);
+        current._panel.reveal();
+        void current._panel.webview.postMessage({ command: 'showDiagram', index: current._diagramsIndex });
     }
 
     public static setViewMode(mode: ViewMode) {
@@ -141,8 +152,22 @@ export class MarkdownDiffPreviewPanel {
                         await this._updateComment(message.commentId, message.type, message.content);
                         break;
                     case 'openDiagramsView':
-                        if (this._document) {
-                            MarkdownDiagramsPanel.createOrShow(this._extensionUri, this._document, message.index ?? 0);
+                        // Single-panel mode: reveal the in-panel diagrams pane
+                        // in place. No second webview panel is ever created, so
+                        // a detached preview window can no longer yank focus
+                        // back to the main window.
+                        this._diagramsIndex = Math.max(0, message.index ?? 0);
+                        void this._panel.webview.postMessage({ command: 'showDiagram', index: this._diagramsIndex });
+                        break;
+                    case 'tabChanged':
+                        if (typeof message.index === 'number' && message.index >= 0) {
+                            this._diagramsIndex = message.index;
+                        }
+                        break;
+                    case 'setClassDetail':
+                        if (message.value === 'minimal' || message.value === 'compact' || message.value === 'full') {
+                            await vscode.workspace.getConfiguration('markdownDiffPreview').update('classDiagramDetail', message.value, true);
+                            this._update();
                         }
                         break;
                     case 'setViewMode':
@@ -495,7 +520,11 @@ export class MarkdownDiffPreviewPanel {
             branch,
             status
         );
-        MarkdownDiagramsPanel.updateIfVisible(this._document);
+    }
+
+    public static getConfiguredDiagramsDetail(): 'minimal' | 'compact' | 'full' {
+        const value = vscode.workspace.getConfiguration('markdownDiffPreview').get<string>('classDiagramDetail');
+        return value === 'minimal' || value === 'compact' ? value : 'full';
     }
 
     private async _getHtmlForWebview(
@@ -539,6 +568,15 @@ export class MarkdownDiffPreviewPanel {
         const addedCount = effectiveDiff?.addedLines.size || 0;
         const removedCount = effectiveDiff?.removedLines.size || 0;
 
+        // In-panel diagrams split: extract + filter here so the pane always
+        // matches the current document without a second webview panel.
+        const detailLevel = MarkdownDiffPreviewPanel.getConfiguredDiagramsDetail();
+        const splitDiagrams = extractDiagrams(markdownContent).map(d => ({
+            ...d,
+            code: filterClassDiagram(d.code, detailLevel)
+        }));
+        const splitPaneHtml = buildDiagramsSplitPaneHtml(splitDiagrams, detailLevel, this._diagramsIndex);
+
         // Get URI for the external stylesheet and mermaid script
         const stylesUri = this._panel.webview.asWebviewUri(
             vscode.Uri.joinPath(this._extensionUri, 'media', 'styles.css')
@@ -561,7 +599,7 @@ export class MarkdownDiffPreviewPanel {
     <link rel="stylesheet" href="${katexUri}">
     <script src="${mermaidUri}"></script>
 </head>
-<body class="view-mode-${this._viewMode}">
+<body class="view-mode-${this._viewMode} split-view-body">
     <div class="header">
         <div class="header-left">
             <span class="file-name">${document.fileName.split('/').pop()}</span>
@@ -587,22 +625,30 @@ export class MarkdownDiffPreviewPanel {
                     Next <span class="nav-arrow">▼</span>
                 </button>
             </div>
-            <button class="diagrams-view-btn" id="diagrams-header-btn" onclick="openDiagramsView(0)" title="Open all diagrams in dedicated tab view (Beside)" style="display:none;">
+            <button class="diagrams-view-btn" id="diagrams-header-btn" onclick="openDiagramsView(0)" title="Show diagrams side-by-side in this panel" style="display:none;">
                 📊 Diagrams (<span id="diagrams-header-count">0</span>)
             </button>
             <button class="refresh-btn" onclick="refresh()">↻ Refresh</button>
         </div>
     </div>
 
-    <div class="content">
-        ${effectiveDiff?.isNew ? `
-            <div class="new-file-banner">
-                <span class="icon">✨</span>
-                <span class="text">This is a new file — all content shown as additions</span>
+    <div class="split-container" id="split-container">
+        <div class="preview-pane" id="preview-pane">
+            <div class="content">
+                ${effectiveDiff?.isNew ? `
+                    <div class="new-file-banner">
+                        <span class="icon">✨</span>
+                        <span class="text">This is a new file — all content shown as additions</span>
+                    </div>
+                ` : ''}
+                
+                ${renderedContent}
             </div>
-        ` : ''}
-        
-        ${renderedContent}
+        </div>
+        <div class="split-splitter" id="split-splitter" role="separator" aria-orientation="vertical" aria-label="Resize preview and diagrams panes" tabindex="0">
+            <div class="split-splitter-handle"></div>
+        </div>
+        ${splitPaneHtml}
     </div>
 
     <script>
@@ -786,12 +832,99 @@ export class MarkdownDiffPreviewPanel {
             }
         }
 
+        // Single-panel split: show the in-panel diagrams pane in place.
+        // No second webview panel is created, so focus never jumps across
+        // OS windows. Falls back to the extension round-trip if the pane
+        // script has not initialized yet.
         function openDiagramsView(index = 0) {
+            const pane = document.getElementById('diagrams-pane');
+            if (pane) pane.classList.remove('collapsed');
+            if (typeof window.splitSelectTab === 'function') {
+                window.splitSelectTab(index);
+                return;
+            }
             vscode.postMessage({
                 command: 'openDiagramsView',
                 index: index
             });
         }
+
+        function toggleDiagramsPane(visible) {
+            const pane = document.getElementById('diagrams-pane');
+            if (!pane) return;
+            const show = visible === undefined ? pane.classList.contains('collapsed') : !!visible;
+            pane.classList.toggle('collapsed', !show);
+            try {
+                const prevState = vscode.getState() || {};
+                vscode.setState({ ...prevState, diagramsVisible: show });
+            } catch (e) { /* ignore */ }
+        }
+
+        function setupSplitSplitter() {
+            const container = document.getElementById('split-container');
+            const splitter = document.getElementById('split-splitter');
+            const previewPane = document.getElementById('preview-pane');
+            const diagramsPane = document.getElementById('diagrams-pane');
+            if (!container || !splitter || !previewPane || !diagramsPane) return;
+            if (splitter.dataset.bound === '1') return;
+            splitter.dataset.bound = '1';
+
+            let ratio = 0.5;
+            try {
+                const saved = vscode.getState()?.splitRatio;
+                if (typeof saved === 'number' && isFinite(saved)) {
+                    ratio = Math.min(0.8, Math.max(0.2, saved));
+                }
+                if (vscode.getState()?.diagramsVisible === false) {
+                    diagramsPane.classList.add('collapsed');
+                }
+            } catch (e) { /* ignore */ }
+
+            const isStackedNarrow = () => window.matchMedia && window.matchMedia('(max-width: 700px)').matches;
+            const applyRatio = (r) => {
+                // Stacked narrow mode lets panes size naturally; an inline
+                // side-by-side flex would force them to 50% heights.
+                if (isStackedNarrow()) {
+                    previewPane.style.flex = '';
+                    diagramsPane.style.flex = '';
+                    return;
+                }
+                ratio = Math.min(0.8, Math.max(0.2, r));
+                previewPane.style.flex = '0 0 ' + (ratio * 100) + '%';
+                diagramsPane.style.flex = '0 0 ' + ((1 - ratio) * 100) + '%';
+                try {
+                    const prevState = vscode.getState() || {};
+                    vscode.setState({ ...prevState, splitRatio: ratio });
+                } catch (e) { /* ignore */ }
+            };
+            applyRatio(ratio);
+
+            let dragging = false;
+            let startX = 0;
+            let startRatio = 0.5;
+            splitter.addEventListener('pointerdown', (e) => {
+                dragging = true;
+                startX = e.clientX;
+                startRatio = ratio;
+                try { splitter.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+                e.preventDefault();
+            });
+            splitter.addEventListener('pointermove', (e) => {
+                if (!dragging) return;
+                const rect = container.getBoundingClientRect();
+                if (rect.width <= 0) return;
+                applyRatio(startRatio + (e.clientX - startX) / rect.width);
+            });
+            const endDrag = () => { dragging = false; };
+            splitter.addEventListener('pointerup', endDrag);
+            splitter.addEventListener('pointercancel', endDrag);
+            splitter.addEventListener('keydown', (e) => {
+                if (e.key === 'ArrowLeft') { e.preventDefault(); applyRatio(ratio - 0.02); }
+                if (e.key === 'ArrowRight') { e.preventDefault(); applyRatio(ratio + 0.02); }
+            });
+        }
+
+        window.toggleDiagramsPane = toggleDiagramsPane;
 
         window.openDiagramsView = openDiagramsView;
         window.openDiagramInTab = openDiagramsView;
@@ -947,6 +1080,7 @@ export class MarkdownDiffPreviewPanel {
         // Make comment threads container scrollable and position correctly
         function onDocumentReady() {
             initMermaid();
+            setupSplitSplitter();
             const container = document.querySelector('.comment-threads-container');
             if (container) {
                 // Ensure container is positioned correctly
@@ -1117,6 +1251,18 @@ export class MarkdownDiffPreviewPanel {
         let isProgrammaticScroll = false;
         let programmaticScrollTimeout = null;
 
+        // Single-panel split: the preview scrolls inside #preview-pane while
+        // the diagrams pane keeps a fixed viewport. Viewport metrics follow
+        // the pane when present; window fallback keeps standalone pages working.
+        function getDiffViewMetrics() {
+            const pane = document.getElementById('preview-pane');
+            if (pane && document.body.classList.contains('split-view-body')) {
+                const r = pane.getBoundingClientRect();
+                return { scrollEl: pane, centerY: r.top + r.height / 2, top: r.top, bottom: r.bottom, scrollTop: pane.scrollTop };
+            }
+            return { scrollEl: null, centerY: window.innerHeight / 2, top: 0, bottom: window.innerHeight, scrollTop: window.scrollY };
+        }
+
         function initDiffNav() {
             const chunks = getLiveDiffChunks();
             if (chunks.length === 0) {
@@ -1124,19 +1270,21 @@ export class MarkdownDiffPreviewPanel {
                 return;
             }
             const headerHeight = document.querySelector('.header')?.offsetHeight || 60;
-            const centerY = window.innerHeight / 2;
+            const metrics = getDiffViewMetrics();
+            const visibleTop = metrics.scrollEl ? metrics.top : headerHeight;
+            const visibleBottom = metrics.scrollEl ? metrics.bottom : window.innerHeight;
             let closestIdx = 0;
             let minDistance = Infinity;
             chunks.forEach((chunk, idx) => {
                 const rect = chunk.target.getBoundingClientRect();
-                const distance = Math.abs(rect.top - centerY);
+                const distance = Math.abs(rect.top - metrics.centerY);
                 if (distance < minDistance) {
                     minDistance = distance;
                     closestIdx = idx;
                 }
             });
             const rect = chunks[closestIdx].target.getBoundingClientRect();
-            if (rect.top < window.innerHeight && rect.bottom > headerHeight) {
+            if (rect.top < visibleBottom && rect.bottom > visibleTop) {
                 currentDiffChunkIndex = closestIdx;
             } else {
                 currentDiffChunkIndex = 0;
@@ -1178,9 +1326,12 @@ export class MarkdownDiffPreviewPanel {
             }
         });
 
-        // Update counter when scrolling
+        // Update counter when scrolling.
+        // Single-panel split: the preview scrolls inside #preview-pane while
+        // the diagrams pane keeps a fixed viewport, so the scroll listener
+        // must follow the pane (window fallback keeps standalone pages working).
         let diffScrollThrottle = null;
-        window.addEventListener('scroll', () => {
+        function handleDiffScroll() {
             if (isProgrammaticScroll) return;
             if (diffScrollThrottle) return;
             diffScrollThrottle = requestAnimationFrame(() => {
@@ -1190,14 +1341,16 @@ export class MarkdownDiffPreviewPanel {
                 const chunks = getLiveDiffChunks();
                 if (chunks.length === 0) return;
                 const headerHeight = document.querySelector('.header')?.offsetHeight || 60;
-                const centerY = window.innerHeight / 2;
+                const metrics = getDiffViewMetrics();
+                const visibleTop = metrics.scrollEl ? metrics.top : headerHeight;
+                const visibleBottom = metrics.scrollEl ? metrics.bottom : window.innerHeight;
 
                 let closestIdx = 0;
                 let minDistance = Infinity;
 
                 chunks.forEach((chunk, idx) => {
                     const rect = chunk.target.getBoundingClientRect();
-                    const distance = Math.abs(rect.top - centerY);
+                    const distance = Math.abs(rect.top - metrics.centerY);
                     if (distance < minDistance) {
                         minDistance = distance;
                         closestIdx = idx;
@@ -1205,15 +1358,20 @@ export class MarkdownDiffPreviewPanel {
                 });
 
                 const rect = chunks[closestIdx].target.getBoundingClientRect();
-                if (rect.top < window.innerHeight && rect.bottom > headerHeight) {
+                if (rect.top < visibleBottom && rect.bottom > visibleTop) {
                     currentDiffChunkIndex = closestIdx;
                     updateDiffNavUI();
-                } else if (window.scrollY < 50) {
+                } else if (metrics.scrollTop < 50) {
                     currentDiffChunkIndex = 0;
                     updateDiffNavUI();
                 }
             });
-        }, { passive: true });
+        }
+        window.addEventListener('scroll', handleDiffScroll, { passive: true });
+        const diffScrollPane = document.getElementById('preview-pane');
+        if (diffScrollPane) {
+            diffScrollPane.addEventListener('scroll', handleDiffScroll, { passive: true });
+        }
 
         document.addEventListener('click', (e) => {
             const navButton = e.target.closest('.comment-nav-btn');

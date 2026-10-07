@@ -5,6 +5,17 @@ All notable changes to the "Markdown Diff Preview" extension will be documented 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.0] - 2026-10-08
+
+### Changed
+
+- Diagrams view merged into the Preview panel: a single panel with left preview + draggable splitter + right diagrams pane (ratio persists, 20%–80%, collapsible, stacks vertically below 700px); a preview dragged to its own window no longer yanks focus back to the main window; `Open Markdown Diagrams View` and `⧉ Open in View` switch the in-pane tab in place (`MarkdownDiagramsPanel` is now a deprecated forwarder that never creates a webview)
+- Panes scroll independently: the preview scrolls inside its own pane while the diagrams pane keeps a fixed viewport (pan/zoom via transform); the diff Prev/Next counter follows the preview pane scroll
+
+### Fixed
+
+- Restored click-to-highlight for class blocks / sequence lane headers in the merged pane (merge regression: `Function.toString()`-serialized helpers lost their sibling scope, throwing `ReferenceError` on first click); serialized bodies are now closure-complete via aliases
+
 ## [1.3.0] - 2026-10-07
 
 ### Fixed

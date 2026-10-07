@@ -16,8 +16,8 @@ describe('mermaid elk layout support', () => {
         );
     });
 
-    test('both panels and demo load the vendored bundle', () => {
-        for (const file of ['src/markdownPreview.ts', 'src/markdownDiagramsPanel.ts', 'scripts/generate-demo.ts']) {
+    test('preview and demo load the vendored bundle', () => {
+        for (const file of ['src/markdownPreview.ts', 'scripts/generate-demo.ts']) {
             const src = readFileSync(join(root, file), 'utf-8');
             assert.ok(
                 src.includes('mermaid.min.js'),

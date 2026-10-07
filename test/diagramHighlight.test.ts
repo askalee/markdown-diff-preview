@@ -150,8 +150,9 @@ describe('diagramHighlight webview wiring', () => {
     test('click handler survives pan pointer-capture (bound on pan container, uses elementFromPoint)', () => {
         // Regression: setupPanZoom calls setPointerCapture on #diagrams-view-main,
         // which retargets click to main — a listener on #diagrams-viewport never fires.
+        // Single-panel mode: the logic lives in src/splitDiagramsPane.ts.
         const panel = readFileSync(
-            join(__dirname, '..', 'src', 'markdownDiagramsPanel.ts'),
+            join(__dirname, '..', 'src', 'splitDiagramsPane.ts'),
             'utf-8',
         );
         assert.ok(

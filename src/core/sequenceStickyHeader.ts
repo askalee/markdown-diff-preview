@@ -19,8 +19,8 @@ export interface StickyLane {
 }
 
 export const STICKY_BAR_HEIGHT = 36;
-const MIN_CHIP_WIDTH = 64;
-const MAX_CHIP_WIDTH = 220;
+export const MIN_CHIP_WIDTH = 64;
+export const MAX_CHIP_WIDTH = 220;
 
 /**
  * True when the real actor headers have scrolled under the sticky bar,

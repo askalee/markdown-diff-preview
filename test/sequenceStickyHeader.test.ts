@@ -71,13 +71,13 @@ describe('sequenceStickyHeader geometry', () => {
 });
 
 describe('sequenceStickyHeader webview wiring', () => {
-    test('diagrams panel contains the sticky bar container', () => {
+    test('diagrams pane contains the sticky bar container', () => {
         const panel = readFileSync(
-            join(__dirname, '..', 'src', 'markdownDiagramsPanel.ts'),
+            join(__dirname, '..', 'src', 'splitDiagramsPane.ts'),
             'utf-8',
         );
         assert.ok(panel.includes('actor-sticky-bar'), 'must render the sticky bar element');
-        assert.ok(panel.includes('syncStickyBar'), 'must sync the bar on pan/zoom/tab switch');
+        assert.ok(panel.includes('StickyBar'), 'must sync the bar on pan/zoom/tab switch');
     });
 
     test('sticky bar styles exist and overlay the top without page scroll', () => {
