@@ -1782,6 +1782,31 @@ body.diagrams-view-body {
     cursor: pointer;
 }
 
+@keyframes diagramHighlightBlink {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.45;
+    }
+}
+
+.diagrams-viewport g.node.diagram-highlight,
+.diagrams-viewport rect.actor.diagram-highlight,
+.diagrams-viewport g.actor-man.diagram-highlight,
+.diagrams-viewport text.actor.diagram-highlight {
+    animation: diagramHighlightBlink 3s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .diagrams-viewport g.node.diagram-highlight,
+    .diagrams-viewport rect.actor.diagram-highlight,
+    .diagrams-viewport g.actor-man.diagram-highlight,
+    .diagrams-viewport text.actor.diagram-highlight {
+        animation: none;
+    }
+}
+
 .diagrams-viewport g.node.diagram-highlight {
     filter: drop-shadow(0 0 8px rgba(88, 166, 255, 0.8));
 }

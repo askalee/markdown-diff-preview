@@ -15,6 +15,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - ELK layout support for Mermaid diagrams: `media/mermaid.min.js` now bundles `@mermaid-js/layout-elk` (mermaid 11.17.2) and registers it at load, so `%%{init: {"layout": "elk"}}%%` diagrams (e.g. `stateDiagram-v2`) render instead of failing with `Unknown layout algorithm: elk`; rebuild with `npm run build:mermaid`
 
+## [1.2.4] - 2026-10-07
+
+### Added
+
+- Diagrams view class/lane highlight now blinks slowly on a 3s cycle (`diagramHighlightBlink`, disabled under `prefers-reduced-motion`) so the selection stays visible in diagrams with many components
+
 ## [1.2.2] - 2026-10-03
 
 ### Fixed

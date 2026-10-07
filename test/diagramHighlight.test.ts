@@ -93,6 +93,22 @@ describe('diagramHighlight styles', () => {
         );
         assert.ok(css.includes('rect.actor'), 'sequence lane headers must have rules');
     });
+
+    test('highlight blinks slowly (3s infinite) and respects reduced motion', () => {
+        const css = readFileSync(join(__dirname, '..', 'media', 'styles.css'), 'utf-8');
+        assert.ok(
+            css.includes('@keyframes diagramHighlightBlink'),
+            'must define diagramHighlightBlink keyframes',
+        );
+        assert.ok(
+            css.includes('diagramHighlightBlink 3s'),
+            'highlight animation must run on a 3s cycle',
+        );
+        assert.ok(
+            css.includes('prefers-reduced-motion'),
+            'must disable blink for prefers-reduced-motion',
+        );
+    });
 });
 
 describe('diagramHighlight renderId-prefixed ids (mermaid 11 regression)', () => {
