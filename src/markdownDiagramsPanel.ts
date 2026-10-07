@@ -11,6 +11,13 @@ import {
     ACTOR_HEADER_SELECTOR,
     DIAGRAM_HIGHLIGHT_CLASS,
 } from './core/diagramHighlight';
+import {
+    shouldShowStickyHeader,
+    computeChipCenterOffset,
+    computeCenterPanX,
+    clampChipWidth,
+    STICKY_BAR_HEIGHT,
+} from './core/sequenceStickyHeader';
 import { decideDiagramsOpen } from './core/diagramsOpen';
 
 interface ParsedDiagram {
@@ -221,6 +228,10 @@ export class MarkdownDiagramsPanel {
         const isSameSrc = isSameDiagramName.toString();
         const extractIdSrc = extractClassIdName.toString();
         const isDragSrc = isDragMovement.toString();
+        const stickyShowSrc = shouldShowStickyHeader.toString();
+        const stickyOffsetSrc = computeChipCenterOffset.toString();
+        const stickyCenterSrc = computeCenterPanX.toString();
+        const stickyClampSrc = clampChipWidth.toString();
 
         return `<!DOCTYPE html>
 <html lang="en">
@@ -265,6 +276,9 @@ export class MarkdownDiagramsPanel {
 
         <!-- Main Diagram Display Stage -->
         <div class="diagrams-view-main" id="diagrams-view-main">
+            <div class="actor-sticky-bar" id="actor-sticky-bar" hidden>
+                <div class="actor-sticky-inner" id="actor-sticky-inner"></div>
+            </div>
             <div class="diagrams-stage" id="diagrams-stage">
                 <div class="diagrams-viewport" id="diagrams-viewport">
                     <div class="mermaid-loading">Rendering diagram...</div>
@@ -312,8 +326,16 @@ export class MarkdownDiagramsPanel {
         const CLASS_NODE_SELECTOR = '${CLASS_NODE_SELECTOR}';
         const ACTOR_HEADER_SELECTOR = '${ACTOR_HEADER_SELECTOR}';
         const HIGHLIGHT_CLASS = '${DIAGRAM_HIGHLIGHT_CLASS}';
+        const STICKY_BAR_HEIGHT = ${STICKY_BAR_HEIGHT};
+        const shouldShowStickyHeader = ${stickyShowSrc};
+        const computeChipCenterOffset = ${stickyOffsetSrc};
+        const computeCenterPanX = ${stickyCenterSrc};
+        const clampChipWidth = ${stickyClampSrc};
         let selectedName = null;
         let selectedNormalized = null;
+        let stickyLanes = [];
+        let stickySvgWidth = 0;
+        let stickyHeaderH = 0;
 
         function getViewState(index) {
             if (!viewStates[index]) {
@@ -573,17 +595,19 @@ export class MarkdownDiagramsPanel {
             viewport.querySelectorAll('.' + HIGHLIGHT_CLASS).forEach((el) => {
                 el.classList.remove(HIGHLIGHT_CLASS);
             });
-            if (!selectedNormalized) return;
-            viewport.querySelectorAll(CLASS_NODE_SELECTOR).forEach((node) => {
-                if (isSameDiagramName(classNodeName(node), selectedName)) {
-                    node.classList.add(HIGHLIGHT_CLASS);
-                }
-            });
-            viewport.querySelectorAll(ACTOR_HEADER_SELECTOR).forEach((el) => {
-                if (isSameDiagramName(actorHeaderName(el), selectedName)) {
-                    el.classList.add(HIGHLIGHT_CLASS);
-                }
-            });
+            if (selectedNormalized) {
+                viewport.querySelectorAll(CLASS_NODE_SELECTOR).forEach((node) => {
+                    if (isSameDiagramName(classNodeName(node), selectedName)) {
+                        node.classList.add(HIGHLIGHT_CLASS);
+                    }
+                });
+                viewport.querySelectorAll(ACTOR_HEADER_SELECTOR).forEach((el) => {
+                    if (isSameDiagramName(actorHeaderName(el), selectedName)) {
+                        el.classList.add(HIGHLIGHT_CLASS);
+                    }
+                });
+            }
+            syncStickyBar();
         }
 
         function setSelected(name) {
@@ -638,6 +662,199 @@ export class MarkdownDiagramsPanel {
             });
         }
 
+        // Sticky sequence lane headers: an HTML bar pinned to the top of
+        // #diagrams-view-main that mirrors panX/zoom (never panY) so lane
+        // chips stay aligned with the lifelines while the real SVG headers
+        // are scrolled out of view. Lane geometry is measured from the live
+        // SVG via getBBox (Mermaid repeats headers top+bottom, so only the
+        // top half is used); positioning math lives in sequenceStickyHeader.
+        function measureActorBox(el, isRect) {
+            let cx = NaN;
+            let top = Infinity;
+            let bottom = -Infinity;
+            let w = 0;
+            try {
+                const b = el.getBBox();
+                cx = b.x + b.width / 2; top = b.y; bottom = b.y + b.height; w = b.width;
+            } catch (e) {
+                const x = parseFloat(el.getAttribute('x') || '');
+                const ww = parseFloat(el.getAttribute('width') || '');
+                if (isFinite(x) && isRect && isFinite(ww)) { cx = x + ww / 2; w = ww; }
+                else if (isFinite(x)) { cx = x; }
+                const y = parseFloat(el.getAttribute('y') || '');
+                if (isFinite(y)) { top = y; bottom = y; }
+            }
+            return isFinite(cx) ? { cx: cx, top: top, bottom: bottom, width: w } : null;
+        }
+
+        function measureLaneLabel(t, rectBoxes, midY, minX, seenNames) {
+            const rawName = t.textContent || '';
+            if (!normalizeDiagramName(rawName)) return null;
+            const box = measureActorBox(t, false);
+            if (!box || box.top >= midY) return null; // bottom duplicate header
+            const key = normalizeDiagramName(rawName);
+            if (seenNames[key]) return null;
+            seenNames[key] = 1;
+            // Lane x must be font-independent: text ink boxes shift with
+            // font loading, so prefer the box center, then the middle
+            // anchor x attribute, and only then the ink bbox center.
+            const xAttr = parseFloat(t.getAttribute('x') || '');
+            let cx = box.cx;
+            let width = box.width + 28;
+            for (let i = 0; i < rectBoxes.length; i++) {
+                if (rectBoxes[i].top < midY
+                    && (Math.abs(rectBoxes[i].cx - box.cx) <= 12
+                        || (isFinite(xAttr) && Math.abs(rectBoxes[i].cx - xAttr) <= 2))) {
+                    cx = rectBoxes[i].cx;
+                    width = rectBoxes[i].width;
+                    break;
+                }
+            }
+            if (cx === box.cx && isFinite(xAttr) && Math.abs(xAttr - box.cx) <= 12) {
+                cx = xAttr;
+            }
+            return { name: rawName.trim(), cx: cx - minX, width: width, bottom: box.bottom };
+        }
+
+        function measureStickyLanes(svg) {
+            let minX = 0;
+            let minY = 0;
+            let svgW = 0;
+            let svgH = 0;
+            try {
+                const vb = svg.viewBox && svg.viewBox.baseVal;
+                if (vb && vb.width > 0 && vb.height > 0) {
+                    minX = vb.x; minY = vb.y; svgW = vb.width; svgH = vb.height;
+                }
+            } catch (e) { /* fall through to base size */ }
+            if (!svgW) {
+                const base = resolveBaseSize(currentIndex);
+                if (!base) return null;
+                svgW = base.w; svgH = base.h;
+            }
+            const midY = minY + svgH / 2;
+            const rectBoxes = [];
+            svg.querySelectorAll('rect.actor').forEach((r) => {
+                const box = measureActorBox(r, true);
+                if (box) rectBoxes.push(box);
+            });
+            const seenNames = {};
+            const lanes = [];
+            let headerBottom = minY;
+            rectBoxes.forEach((rb) => {
+                if (rb.top < midY && rb.bottom > headerBottom) headerBottom = rb.bottom;
+            });
+            svg.querySelectorAll('text.actor').forEach((t) => {
+                const lane = measureLaneLabel(t, rectBoxes, midY, minX, seenNames);
+                if (!lane) return;
+                lanes.push(lane);
+                if (lane.bottom > headerBottom) headerBottom = lane.bottom;
+            });
+            svg.querySelectorAll('g.actor-man').forEach((g) => {
+                try {
+                    const b = g.getBBox();
+                    if (b.y < midY && b.y + b.height > headerBottom) headerBottom = b.y + b.height;
+                } catch (e) { /* ignore */ }
+            });
+            if (lanes.length === 0) return null;
+            lanes.sort((a, b) => a.cx - b.cx);
+            return { lanes: lanes, svgWidth: svgW, headerH: Math.max(0, headerBottom - minY) };
+        }
+
+        function rebuildStickyBar() {
+            const bar = document.getElementById('actor-sticky-bar');
+            const inner = document.getElementById('actor-sticky-inner');
+            stickyLanes = [];
+            stickySvgWidth = 0;
+            stickyHeaderH = 0;
+            if (!bar || !inner) return;
+            inner.innerHTML = '';
+            bar.hidden = true;
+            const viewport = document.getElementById('diagrams-viewport');
+            const svg = viewport ? viewport.querySelector('svg') : null;
+            if (!svg) return;
+            const measured = measureStickyLanes(svg);
+            if (!measured) return;
+            stickyLanes = measured.lanes;
+            stickySvgWidth = measured.svgWidth;
+            stickyHeaderH = measured.headerH;
+            // Lane geometry measured above via measureStickyLanes(svg).
+            measured.lanes.forEach((lane, i) => {
+                const chip = document.createElement('button');
+                chip.className = 'actor-sticky-chip';
+                chip.type = 'button';
+                chip.textContent = lane.name;
+                chip.title = lane.name;
+                chip.setAttribute('aria-label', 'Center lane ' + lane.name);
+                chip.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    centerStickyLane(i);
+                });
+                inner.appendChild(chip);
+            });
+            syncStickyBar();
+        }
+
+        function syncStickyBar() {
+            const bar = document.getElementById('actor-sticky-bar');
+            const inner = document.getElementById('actor-sticky-inner');
+            if (!bar || !inner) return;
+            if (stickyLanes.length === 0 || !(stickySvgWidth > 0)) {
+                bar.hidden = true;
+                return;
+            }
+            const main = document.getElementById('diagrams-view-main');
+            const base = resolveBaseSize(currentIndex);
+            if (!main || !base) {
+                bar.hidden = true;
+                return;
+            }
+            const show = shouldShowStickyHeader({
+                panY: panY,
+                svgHeight: base.h * currentZoom,
+                headerHeight: stickyHeaderH * currentZoom,
+                mainHeight: main.clientHeight,
+                barHeight: STICKY_BAR_HEIGHT,
+            });
+            bar.hidden = !show;
+            if (!show) return;
+            const chips = inner.children;
+            for (let i = 0; i < stickyLanes.length && i < chips.length; i++) {
+                const lane = stickyLanes[i];
+                const chip = chips[i];
+                const offset = Math.round(computeChipCenterOffset(lane.cx, stickySvgWidth, currentZoom, panX));
+                chip.style.left = 'calc(50% + ' + offset + 'px)';
+                chip.style.width = clampChipWidth(lane.width * currentZoom, 64, 220) + 'px';
+                chip.classList.toggle('active', !!selectedName && isSameDiagramName(lane.name, selectedName));
+            }
+        }
+
+        function centerStickyLane(i) {
+            const lane = stickyLanes[i];
+            if (!lane || !(stickySvgWidth > 0)) return;
+            panX = computeCenterPanX(lane.cx, stickySvgWidth, currentZoom);
+            const norm = normalizeDiagramName(lane.name);
+            if (norm) {
+                selectedName = lane.name;
+                selectedNormalized = norm;
+            }
+            syncViewState();
+            applyZoom();
+            applyHighlight();
+            syncStickyBar();
+        }
+
+        function setupStickyBar() {
+            const bar = document.getElementById('actor-sticky-bar');
+            if (!bar || bar.dataset.bound === '1') return;
+            bar.dataset.bound = '1';
+            // The bar is a control strip: dragging on it must not pan the
+            // diagram, double-clicking it must not reset zoom. Wheel zoom
+            // still bubbles to #diagrams-view-main.
+            bar.addEventListener('pointerdown', (e) => e.stopPropagation());
+            bar.addEventListener('dblclick', (e) => e.stopPropagation());
+        }
+
         async function selectTab(index) {
             if (index < 0 || index >= rawDiagrams.length) return;
             if (index !== currentIndex) {
@@ -664,6 +881,7 @@ export class MarkdownDiagramsPanel {
                 viewport.innerHTML = svg;
                 collapseEmptyClassBoxes(viewport);
                 applyHighlight();
+                rebuildStickyBar();
             }
 
             if (hasViewState(index)) {
@@ -739,6 +957,7 @@ export class MarkdownDiagramsPanel {
             if (zoomLevelEl) {
                 zoomLevelEl.textContent = Math.round(currentZoom * 100) + '%';
             }
+            syncStickyBar();
         }
 
         function setupPanZoom() {
@@ -905,6 +1124,8 @@ export class MarkdownDiagramsPanel {
         // Robust triggering for Webview lifecycle
         setupPanZoom();
         setupHighlight();
+        setupStickyBar();
+        window.addEventListener('resize', () => syncStickyBar());
         if (document.readyState === 'complete' || document.readyState === 'interactive') {
             initMermaid();
         } else {

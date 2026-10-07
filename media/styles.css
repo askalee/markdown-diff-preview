@@ -1835,3 +1835,53 @@ body.diagrams-view-body {
     font-weight: 700 !important;
 }
 
+/* Sticky sequence lane headers (Diagrams view only) */
+.actor-sticky-bar {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 36px;
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border-color);
+    overflow: hidden;
+    z-index: 5;
+}
+
+.actor-sticky-inner {
+    position: relative;
+    width: 100%;
+    height: 100%;
+}
+
+.actor-sticky-chip {
+    position: absolute;
+    top: 5px;
+    transform: translateX(-50%);
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+    padding: 3px 8px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-align: center;
+    cursor: pointer;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+.actor-sticky-chip:hover {
+    background: var(--border-color);
+    color: var(--text-primary);
+}
+
+.actor-sticky-chip.active {
+    background: var(--accent-purple);
+    border-color: var(--accent-purple);
+    color: #ffffff;
+}
+
