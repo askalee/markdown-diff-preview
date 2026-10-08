@@ -192,7 +192,7 @@
     "demo": "npx ts-node scripts/generate-demo.ts",
     "demo:serve": "npx ts-node scripts/generate-demo.ts && npx serve . -l 3000 --no-clipboard",
     "build:mermaid": "node scripts/build-mermaid-bundle.mjs",
-    "install:vsix": "node scripts/install-vsix.mjs",
+    "install": "node scripts/install-vsix.mjs",
     "publish": "ovsx publish --pat $OVSX_PAT"
   },
   "devDependencies": {
