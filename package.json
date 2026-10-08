@@ -2,7 +2,7 @@
   "name": "markdown-diff-preview",
   "displayName": "Markdown Diff Preview",
   "description": "A beautiful Markdown preview that highlights git diffs inline with green/red highlighting for added/removed lines",
-  "version": "1.5.1",
+  "version": "1.6.0",
   "publisher": "batlounis",
   "author": {
     "name": "Salim Batlouni"
@@ -81,6 +81,18 @@
       {
         "command": "markdownDiffPreview.showDiffMode",
         "title": "Markdown Diff Preview: Show Diff Mode"
+      },
+      {
+        "command": "markdownDiffPreview.showPreviewOnly",
+        "title": "Markdown Diff Preview: Show Preview Only"
+      },
+      {
+        "command": "markdownDiffPreview.showDiagramsOnly",
+        "title": "Markdown Diff Preview: Show Diagrams Only"
+      },
+      {
+        "command": "markdownDiffPreview.showBothPanes",
+        "title": "Markdown Diff Preview: Show Preview and Diagrams"
       }
     ],
     "menus": {
@@ -114,6 +126,15 @@
         },
         {
           "command": "markdownDiffPreview.showDiffMode"
+        },
+        {
+          "command": "markdownDiffPreview.showPreviewOnly"
+        },
+        {
+          "command": "markdownDiffPreview.showDiagramsOnly"
+        },
+        {
+          "command": "markdownDiffPreview.showBothPanes"
         }
       ]
     },

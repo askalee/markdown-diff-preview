@@ -846,8 +846,9 @@ body.vscode-high-contrast .diff-word-added {
     }
 }
 
-/* View Mode Toggle (Normal / Diff) */
-.view-mode-toggle {
+/* View Mode Toggle (Normal / Diff) + Pane Visibility Toggle (Preview / Both / Diagrams) */
+.view-mode-toggle,
+.pane-visibility-toggle {
     display: inline-flex;
     align-items: center;
     background: var(--bg-tertiary);
@@ -1979,8 +1980,24 @@ body.diagrams-view-body {
     min-height: 400px;
 }
 
-.diagrams-pane.collapsed {
+.diagrams-pane.collapsed,
+body.split-view-body .diagrams-pane.collapsed,
+.preview-pane.collapsed,
+body.split-view-body .preview-pane.collapsed {
     display: none;
+}
+
+.split-splitter.hidden {
+    display: none;
+}
+
+.split-container.pane-preview-only .preview-pane,
+.split-container.pane-diagrams-only .diagrams-pane {
+    flex: 1 1 100%;
+}
+
+.split-container.pane-diagrams-only .diagrams-pane {
+    border-left: none;
 }
 
 .diagrams-pane .diagrams-view-container {

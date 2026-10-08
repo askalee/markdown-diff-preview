@@ -5,6 +5,17 @@ All notable changes to the "Markdown Diff Preview" extension will be documented 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.0] - 2026-10-08
+
+### Added
+
+- Pane visibility toggle: header `Preview | Both | Diagrams` switch, diagrams-pane `Preview: hide` button, and commands `Show Preview Only` / `Show Diagrams Only` / `Show Preview and Diagrams`; single-pane mode fills the window (inline split flex is rewritten on switch) and the choice persists via webview state with legacy `diagramsVisible` fallback
+
+### Fixed
+
+- Fixed the diagrams `✕` button not hiding the pane: `body.split-view-body .diagrams-pane { display: flex }` beat `.diagrams-pane.collapsed { display: none }` on specificity; collapsed selectors are now equally specific
+- Fixed single-pane mode staying at half width: the splitter's inline `flex: 0 0 50%` overrode the stylesheet's full-width rule (regression test: `test/paneVisibility.test.ts`, new core module `src/core/paneVisibility.ts`)
+
 ## [1.5.1] - 2026-10-08
 
 ### Fixed

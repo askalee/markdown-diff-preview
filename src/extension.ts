@@ -81,6 +81,27 @@ export function activate(context: vscode.ExtensionContext) {
         }
     );
 
+    const showPreviewOnlyCommand = vscode.commands.registerCommand(
+        'markdownDiffPreview.showPreviewOnly',
+        () => {
+            MarkdownDiffPreviewPanel.setPaneVisibility('preview');
+        }
+    );
+
+    const showDiagramsOnlyCommand = vscode.commands.registerCommand(
+        'markdownDiffPreview.showDiagramsOnly',
+        () => {
+            MarkdownDiffPreviewPanel.setPaneVisibility('diagrams');
+        }
+    );
+
+    const showBothPanesCommand = vscode.commands.registerCommand(
+        'markdownDiffPreview.showBothPanes',
+        () => {
+            MarkdownDiffPreviewPanel.setPaneVisibility('both');
+        }
+    );
+
     // Auto-update preview when document changes
     const onDocumentChange = vscode.workspace.onDidChangeTextDocument((e) => {
         if (e.document.languageId === 'markdown') {
@@ -130,6 +151,9 @@ export function activate(context: vscode.ExtensionContext) {
         toggleViewModeCommand,
         showNormalModeCommand,
         showDiffModeCommand,
+        showPreviewOnlyCommand,
+        showDiagramsOnlyCommand,
+        showBothPanesCommand,
         onDocumentChange,
         onActiveEditorChange,
         onConfigChange,

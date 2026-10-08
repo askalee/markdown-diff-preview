@@ -43,7 +43,8 @@ export function buildDiagramsSplitPaneHtml(
                     <button class="diagrams-ctrl-btn" onclick="splitCopySvg()" title="Copy Diagram SVG to Clipboard" aria-label="Copy SVG">Copy SVG</button>
                     <button class="diagrams-ctrl-btn actor-sticky-toggle" id="actor-sticky-toggle" onclick="splitToggleStickyBar(event)" title="Hide lane bar" aria-label="Hide lane bar" aria-pressed="true">Lanes</button>
                     <button class="diagrams-ctrl-btn" onclick="splitJumpToEditorLine()" title="Jump to Line in Markdown Editor" aria-label="Jump to line">⎘ Jump to line</button>
-                    <button class="diagrams-ctrl-btn" onclick="toggleDiagramsPane(false)" title="Hide Diagrams pane" aria-label="Hide diagrams">✕</button>
+                    <button class="diagrams-ctrl-btn" onclick="window.setPaneVisibility ? window.setPaneVisibility('diagrams') : toggleDiagramsPane(true)" title="Hide preview, show diagrams only" aria-label="Show diagrams only">🗖 Preview: hide</button>
+                    <button class="diagrams-ctrl-btn" onclick="toggleDiagramsPane(false)" title="Hide diagrams, show preview only" aria-label="Show preview only">✕</button>
                 </div>
             </div>
             <div class="diagrams-view-main" id="diagrams-view-main">

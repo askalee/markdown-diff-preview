@@ -6,6 +6,7 @@ import { DEFAULT_VIEW_MODE, ViewMode, isViewMode, resolveEffectiveDiff, shouldSh
 import { parseCommentsData } from './core/commentParser';
 import { extractDiagrams } from './core/extractDiagrams';
 import { filterClassDiagram } from './core/classDiagramDetail';
+import { DEFAULT_PANE_VISIBILITY, PaneVisibility, isPaneVisibility } from './core/paneVisibility';
 import { buildDiagramsSplitPaneHtml } from './splitDiagramsPane';
 
 export class MarkdownDiffPreviewPanel {
@@ -16,6 +17,7 @@ export class MarkdownDiffPreviewPanel {
     private readonly _extensionUri: vscode.Uri;
     private _document: vscode.TextDocument | undefined;
     private _viewMode: ViewMode = DEFAULT_VIEW_MODE;
+    private _paneVisibility: PaneVisibility = DEFAULT_PANE_VISIBILITY;
     private _diagramsIndex: number = 0;
     private _disposables: vscode.Disposable[] = [];
 
@@ -93,6 +95,34 @@ export class MarkdownDiffPreviewPanel {
                 MarkdownDiffPreviewPanel.currentPanel._update();
             }
         }
+    }
+
+    public static getPaneVisibility(): PaneVisibility {
+        return MarkdownDiffPreviewPanel.currentPanel?._paneVisibility ?? DEFAULT_PANE_VISIBILITY;
+    }
+
+    public static setPaneVisibility(mode: PaneVisibility) {
+        const current = MarkdownDiffPreviewPanel.currentPanel;
+        if (!current) return;
+        if (!isPaneVisibility(mode)) return;
+        if (current._paneVisibility !== mode) {
+            current._paneVisibility = mode;
+            current._update();
+        } else {
+            void current._panel.webview.postMessage({ command: 'setPaneVisibility', visibility: mode });
+        }
+    }
+
+    public static showPreviewOnly() {
+        MarkdownDiffPreviewPanel.setPaneVisibility('preview');
+    }
+
+    public static showDiagramsOnly() {
+        MarkdownDiffPreviewPanel.setPaneVisibility('diagrams');
+    }
+
+    public static showBothPanes() {
+        MarkdownDiffPreviewPanel.setPaneVisibility('both');
     }
 
     public static toggleViewMode() {
@@ -174,6 +204,17 @@ export class MarkdownDiffPreviewPanel {
                     case 'setViewMode':
                         if (isViewMode(message.mode)) {
                             this._viewMode = message.mode;
+                            this._update();
+                        }
+                        break;
+                    case 'paneVisibilityChanged':
+                        if (isPaneVisibility(message.visibility)) {
+                            this._paneVisibility = message.visibility;
+                        }
+                        break;
+                    case 'setPaneVisibility':
+                        if (isPaneVisibility(message.visibility)) {
+                            this._paneVisibility = message.visibility;
                             this._update();
                         }
                         break;
@@ -631,12 +672,17 @@ export class MarkdownDiffPreviewPanel {
             <button class="diagrams-view-btn" id="diagrams-header-btn" onclick="openDiagramsView(0)" title="Show diagrams side-by-side in this panel" style="display:none;">
                 📊 Diagrams (<span id="diagrams-header-count">0</span>)
             </button>
+            <div class="pane-visibility-toggle" role="tablist" aria-label="Pane visibility">
+                <button class="view-mode-btn${this._paneVisibility === 'preview' ? ' active' : ''}" id="pane-preview-btn" onclick="setPaneVisibility('preview')" title="Show Markdown preview only" aria-label="Preview only">Preview</button>
+                <button class="view-mode-btn${this._paneVisibility === 'both' ? ' active' : ''}" id="pane-both-btn" onclick="setPaneVisibility('both')" title="Show preview and diagrams side-by-side" aria-label="Both panes">Both</button>
+                <button class="view-mode-btn${this._paneVisibility === 'diagrams' ? ' active' : ''}" id="pane-diagrams-btn" onclick="setPaneVisibility('diagrams')" title="Show diagrams only" aria-label="Diagrams only">Diagrams</button>
+            </div>
             <button class="refresh-btn" onclick="refresh()">↻ Refresh</button>
         </div>
     </div>
 
-    <div class="split-container" id="split-container">
-        <div class="preview-pane" id="preview-pane">
+    <div class="split-container${this._paneVisibility === 'preview' ? ' pane-preview-only' : this._paneVisibility === 'diagrams' ? ' pane-diagrams-only' : ''}" id="split-container">
+        <div class="preview-pane${this._paneVisibility === 'diagrams' ? ' collapsed' : ''}" id="preview-pane">
             <div class="content">
                 ${effectiveDiff?.isNew ? `
                     <div class="new-file-banner">
@@ -648,7 +694,7 @@ export class MarkdownDiffPreviewPanel {
                 ${renderedContent}
             </div>
         </div>
-        <div class="split-splitter" id="split-splitter" role="separator" aria-orientation="vertical" aria-label="Resize preview and diagrams panes" tabindex="0">
+        <div class="split-splitter${this._paneVisibility === 'both' ? '' : ' hidden'}" id="split-splitter" role="separator" aria-orientation="vertical" aria-label="Resize preview and diagrams panes" tabindex="0"${this._paneVisibility === 'both' ? '' : ' aria-hidden="true"'}>
             <div class="split-splitter-handle"></div>
         </div>
         ${splitPaneHtml}
@@ -662,6 +708,96 @@ export class MarkdownDiffPreviewPanel {
         const NON_NAVIGABLE_SELECTOR = window.PreviewNav.NON_NAVIGABLE_SELECTOR;
         const resolveNavigationLine = window.PreviewNav.resolveNavigationLine;
         window.initialViewMode = '${this._viewMode}';
+        window.initialPaneVisibility = '${this._paneVisibility}';
+
+        function isPaneVisibilityValue(v) {
+            return v === 'both' || v === 'preview' || v === 'diagrams';
+        }
+
+        function isStackedNarrow() {
+            return !!(window.matchMedia && window.matchMedia('(max-width: 700px)').matches);
+        }
+
+        function getSavedSplitRatio() {
+            try {
+                const saved = vscode.getState()?.splitRatio;
+                if (typeof saved === 'number' && isFinite(saved)) {
+                    return Math.min(0.8, Math.max(0.2, saved));
+                }
+            } catch (e) { /* ignore */ }
+            return 0.5;
+        }
+
+        function setBothPanesFlex(r) {
+            const previewPane = document.getElementById('preview-pane');
+            const diagramsPane = document.getElementById('diagrams-pane');
+            if (!previewPane || !diagramsPane) return 0.5;
+            const clamped = Math.min(0.8, Math.max(0.2, r));
+            previewPane.style.flex = '0 0 ' + (clamped * 100) + '%';
+            diagramsPane.style.flex = '0 0 ' + ((1 - clamped) * 100) + '%';
+            return clamped;
+        }
+
+        function setSinglePaneFlex(mode) {
+            const previewPane = document.getElementById('preview-pane');
+            const diagramsPane = document.getElementById('diagrams-pane');
+            if (!previewPane || !diagramsPane) return;
+            // Stacked narrow mode sizes panes naturally; an inline 100%
+            // basis would force wrong heights there.
+            if (isStackedNarrow()) {
+                previewPane.style.flex = '';
+                diagramsPane.style.flex = '';
+                return;
+            }
+            const visiblePane = mode === 'preview' ? previewPane : diagramsPane;
+            visiblePane.style.flex = '1 1 100%';
+        }
+
+        function applyPaneVisibility(mode) {
+            if (!isPaneVisibilityValue(mode)) return;
+            const container = document.getElementById('split-container');
+            const previewPane = document.getElementById('preview-pane');
+            const diagramsPane = document.getElementById('diagrams-pane');
+            const splitter = document.getElementById('split-splitter');
+            if (!container || !previewPane || !diagramsPane || !splitter) return;
+            const showPreview = mode !== 'diagrams';
+            const showDiagrams = mode !== 'preview';
+            previewPane.classList.toggle('collapsed', !showPreview);
+            diagramsPane.classList.toggle('collapsed', !showDiagrams);
+            splitter.classList.toggle('hidden', !showPreview || !showDiagrams);
+            if (!showPreview || !showDiagrams) {
+                splitter.setAttribute('aria-hidden', 'true');
+            } else {
+                splitter.removeAttribute('aria-hidden');
+            }
+            container.classList.toggle('pane-preview-only', mode === 'preview');
+            container.classList.toggle('pane-diagrams-only', mode === 'diagrams');
+            // Inline flex from the splitter beats stylesheet rules, so the
+            // flex must be rewritten here too — otherwise the single pane
+            // stays at 50% instead of filling the window.
+            if (mode === 'both') {
+                setBothPanesFlex(getSavedSplitRatio());
+            } else {
+                setSinglePaneFlex(mode);
+            }
+            ['preview', 'both', 'diagrams'].forEach((m) => {
+                const btn = document.getElementById('pane-' + m + '-btn');
+                if (btn) btn.classList.toggle('active', m === mode);
+            });
+            try {
+                const prevState = vscode.getState() || {};
+                vscode.setState({ ...prevState, paneVisibility: mode, diagramsVisible: showDiagrams });
+            } catch (e) { /* ignore */ }
+        }
+
+        function setPaneVisibility(mode) {
+            if (!isPaneVisibilityValue(mode)) return;
+            applyPaneVisibility(mode);
+            vscode.postMessage({ command: 'paneVisibilityChanged', visibility: mode });
+        }
+
+        window.setPaneVisibility = setPaneVisibility;
+        window.applyPaneVisibility = applyPaneVisibility;
 
         function switchViewMode(mode) {
             if (mode !== 'normal' && mode !== 'diff') return;
@@ -686,6 +822,20 @@ export class MarkdownDiffPreviewPanel {
                 vscode.postMessage({ command: 'setViewMode', mode: persistedViewMode });
             } else if (!vscode.getState()?.viewMode) {
                 vscode.setState({ ...(vscode.getState() || {}), viewMode: window.initialViewMode });
+            }
+            const persistedPane = vscode.getState()?.paneVisibility;
+            const legacyDiagramsVisible = vscode.getState()?.diagramsVisible;
+            let resolvedPane = window.initialPaneVisibility;
+            if (persistedPane === 'both' || persistedPane === 'preview' || persistedPane === 'diagrams') {
+                resolvedPane = persistedPane;
+            } else if (legacyDiagramsVisible === false) {
+                resolvedPane = 'preview';
+            }
+            if (resolvedPane !== window.initialPaneVisibility) {
+                applyPaneVisibility(resolvedPane);
+                vscode.postMessage({ command: 'paneVisibilityChanged', visibility: resolvedPane });
+            } else if (!vscode.getState()?.paneVisibility) {
+                vscode.setState({ ...(vscode.getState() || {}), paneVisibility: window.initialPaneVisibility });
             }
         } catch (e) {
             console.warn('[md-preview] getState failed:', e);
@@ -843,8 +993,15 @@ export class MarkdownDiffPreviewPanel {
         // OS windows. Falls back to the extension round-trip if the pane
         // script has not initialized yet.
         function openDiagramsView(index = 0) {
-            const pane = document.getElementById('diagrams-pane');
-            if (pane) pane.classList.remove('collapsed');
+            const diagramsPane = document.getElementById('diagrams-pane');
+            const previewPane = document.getElementById('preview-pane');
+            const diagramsHidden = diagramsPane && diagramsPane.classList.contains('collapsed');
+            const previewHidden = previewPane && previewPane.classList.contains('collapsed');
+            if (diagramsHidden && !previewHidden) {
+                setPaneVisibility('both');
+            } else if (diagramsHidden && previewHidden) {
+                setPaneVisibility('diagrams');
+            }
             if (typeof window.splitSelectTab === 'function') {
                 window.splitSelectTab(index);
                 return;
@@ -855,15 +1012,33 @@ export class MarkdownDiffPreviewPanel {
             });
         }
 
+        // Legacy entry kept for the diagrams pane ✕ button: hiding the
+        // diagrams pane means preview-only; showing it restores both panes
+        // unless the preview itself is hidden (then show diagrams-only).
         function toggleDiagramsPane(visible) {
-            const pane = document.getElementById('diagrams-pane');
-            if (!pane) return;
-            const show = visible === undefined ? pane.classList.contains('collapsed') : !!visible;
-            pane.classList.toggle('collapsed', !show);
-            try {
-                const prevState = vscode.getState() || {};
-                vscode.setState({ ...prevState, diagramsVisible: show });
-            } catch (e) { /* ignore */ }
+            const diagramsPane = document.getElementById('diagrams-pane');
+            const previewPane = document.getElementById('preview-pane');
+            if (!diagramsPane || !previewPane) return;
+            if (visible === false) {
+                setPaneVisibility('preview');
+                return;
+            }
+            if (visible === true) {
+                if (previewPane.classList.contains('collapsed')) {
+                    setPaneVisibility('diagrams');
+                } else {
+                    setPaneVisibility('both');
+                }
+                return;
+            }
+            const diagramsHidden = diagramsPane.classList.contains('collapsed');
+            if (!diagramsHidden) {
+                setPaneVisibility('preview');
+            } else if (previewPane.classList.contains('collapsed')) {
+                setPaneVisibility('diagrams');
+            } else {
+                setPaneVisibility('both');
+            }
         }
 
         function setupSplitSplitter() {
@@ -875,18 +1050,18 @@ export class MarkdownDiffPreviewPanel {
             if (splitter.dataset.bound === '1') return;
             splitter.dataset.bound = '1';
 
-            let ratio = 0.5;
+            let ratio = getSavedSplitRatio();
             try {
-                const saved = vscode.getState()?.splitRatio;
-                if (typeof saved === 'number' && isFinite(saved)) {
-                    ratio = Math.min(0.8, Math.max(0.2, saved));
-                }
-                if (vscode.getState()?.diagramsVisible === false) {
-                    diagramsPane.classList.add('collapsed');
+                const savedPane = vscode.getState()?.paneVisibility;
+                if (savedPane === 'preview' || savedPane === 'diagrams' || savedPane === 'both') {
+                    applyPaneVisibility(savedPane);
+                } else if (vscode.getState()?.diagramsVisible === false) {
+                    applyPaneVisibility('preview');
+                } else {
+                    applyPaneVisibility(window.initialPaneVisibility || 'both');
                 }
             } catch (e) { /* ignore */ }
 
-            const isStackedNarrow = () => window.matchMedia && window.matchMedia('(max-width: 700px)').matches;
             const applyRatio = (r) => {
                 // Stacked narrow mode lets panes size naturally; an inline
                 // side-by-side flex would force them to 50% heights.
@@ -895,9 +1070,17 @@ export class MarkdownDiffPreviewPanel {
                     diagramsPane.style.flex = '';
                     return;
                 }
-                ratio = Math.min(0.8, Math.max(0.2, r));
-                previewPane.style.flex = '0 0 ' + (ratio * 100) + '%';
-                diagramsPane.style.flex = '0 0 ' + ((1 - ratio) * 100) + '%';
+                // Single-pane mode: keep the visible pane at full width
+                // instead of forcing the 50/50 split back.
+                if (container.classList.contains('pane-preview-only')) {
+                    setSinglePaneFlex('preview');
+                    return;
+                }
+                if (container.classList.contains('pane-diagrams-only')) {
+                    setSinglePaneFlex('diagrams');
+                    return;
+                }
+                ratio = setBothPanesFlex(r);
                 try {
                     const prevState = vscode.getState() || {};
                     vscode.setState({ ...prevState, splitRatio: ratio });
@@ -1315,6 +1498,9 @@ export class MarkdownDiffPreviewPanel {
             const message = event.data;
             if (message?.command === 'navigateDiff') {
                 navigateDiff(message.direction);
+            }
+            if (message?.command === 'setPaneVisibility') {
+                applyPaneVisibility(message.visibility);
             }
         });
 
