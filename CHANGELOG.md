@@ -5,6 +5,12 @@ All notable changes to the "Markdown Diff Preview" extension will be documented 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.1] - 2026-10-08
+
+### Fixed
+
+- Detached preview window keeps OS focus on diagrams actions: `showDiagram` reveals with `preserveFocus`, `Jump to line` / selection sync open the editor with `preserveFocus: true` (regression test: `test/diagramsFocus.test.ts`)
+
 ## [1.5.0] - 2026-10-08
 
 ### Added

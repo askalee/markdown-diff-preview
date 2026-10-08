@@ -80,7 +80,9 @@ export class MarkdownDiffPreviewPanel {
         const current = MarkdownDiffPreviewPanel.currentPanel;
         if (!current) return;
         current._diagramsIndex = Math.max(0, index);
-        current._panel.reveal();
+        // Detached preview window must keep OS focus: reveal without stealing it.
+        const preserveFocus = true;
+        current._panel.reveal(undefined, preserveFocus);
         void current._panel.webview.postMessage({ command: 'showDiagram', index: current._diagramsIndex });
     }
 
@@ -363,10 +365,14 @@ export class MarkdownDiffPreviewPanel {
             editor => editor.document.uri.toString() === this._document!.uri.toString()
         );
 
-        // If not visible, open the document
+        // If not visible, open the document without stealing OS focus
+        // from a detached preview window.
         if (!targetEditor) {
             const doc = await vscode.workspace.openTextDocument(this._document.uri);
-            targetEditor = await vscode.window.showTextDocument(doc, vscode.ViewColumn.One);
+            targetEditor = await vscode.window.showTextDocument(doc, {
+                viewColumn: vscode.ViewColumn.One,
+                preserveFocus: true,
+            });
         }
 
         if (targetEditor) {
@@ -392,10 +398,14 @@ export class MarkdownDiffPreviewPanel {
             editor => editor.document.uri.toString() === this._document!.uri.toString()
         );
 
-        // If not visible, open the document
+        // If not visible, open the document without stealing OS focus
+        // from a detached preview window.
         if (!targetEditor) {
             const doc = await vscode.workspace.openTextDocument(this._document.uri);
-            targetEditor = await vscode.window.showTextDocument(doc, vscode.ViewColumn.One);
+            targetEditor = await vscode.window.showTextDocument(doc, {
+                viewColumn: vscode.ViewColumn.One,
+                preserveFocus: true,
+            });
         }
 
         if (targetEditor) {
