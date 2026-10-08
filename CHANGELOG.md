@@ -5,6 +5,16 @@ All notable changes to the "Markdown Diff Preview" extension will be documented 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.0] - 2026-10-08
+
+### Added
+
+- Sequence sticky lane bar now scales with zoom: chip font size (`12px` at 100%, clamped to `11–18px`) and bar height (`36px` at 100%, clamped to `28–64px`); header `Lanes` toggle hides/shows the bar manually
+
+### Fixed
+
+- Added the missing ESLint config (`.eslintrc.json`, TS parser + recommended rules) so `npm run lint` runs; fixed the reported smells (dead locals, `prefer-const`, lexical declarations in `case` blocks)
+
 ## [1.4.0] - 2026-10-08
 
 ### Changed

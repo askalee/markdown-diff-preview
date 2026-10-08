@@ -41,6 +41,7 @@ export function buildDiagramsSplitPaneHtml(
                     <button class="diagrams-ctrl-btn" id="diagrams-zoom-level" onclick="splitResetZoom()" title="Reset Zoom (fit to view)" aria-label="Reset Zoom">100%</button>
                     <button class="diagrams-ctrl-btn" onclick="splitZoomDiagram(1.2)" title="Zoom In" aria-label="Zoom In"><span class="ctrl-icon">+</span></button>
                     <button class="diagrams-ctrl-btn" onclick="splitCopySvg()" title="Copy Diagram SVG to Clipboard" aria-label="Copy SVG">Copy SVG</button>
+                    <button class="diagrams-ctrl-btn actor-sticky-toggle" id="actor-sticky-toggle" onclick="splitToggleStickyBar(event)" title="Hide lane bar" aria-label="Hide lane bar" aria-pressed="true">Lanes</button>
                     <button class="diagrams-ctrl-btn" onclick="splitJumpToEditorLine()" title="Jump to Line in Markdown Editor" aria-label="Jump to line">⎘ Jump to line</button>
                     <button class="diagrams-ctrl-btn" onclick="toggleDiagramsPane(false)" title="Hide Diagrams pane" aria-label="Hide diagrams">✕</button>
                 </div>
@@ -93,6 +94,8 @@ export function buildDiagramsSplitPaneHtml(
         const splitComputeChipCenterOffset = window.DiagramUtils.computeChipCenterOffset;
         const splitComputeCenterPanX = window.DiagramUtils.computeCenterPanX;
         const splitClampChipWidth = window.DiagramUtils.clampChipWidth;
+        const splitComputeChipFontSize = window.DiagramUtils.computeChipFontSize;
+        const splitComputeStickyBarHeight = window.DiagramUtils.computeStickyBarHeight;
         // Aliases for helper bodies that reference their original sibling
         // names (e.g. isSameDiagramName calls normalizeDiagramName).
         const normalizeDiagramName = splitNormalizeDiagramName;
@@ -103,6 +106,8 @@ export function buildDiagramsSplitPaneHtml(
         const computeChipCenterOffset = splitComputeChipCenterOffset;
         const computeCenterPanX = splitComputeCenterPanX;
         const clampChipWidth = splitClampChipWidth;
+        const computeChipFontSize = splitComputeChipFontSize;
+        const computeStickyBarHeight = splitComputeStickyBarHeight;
         const STICKY_BAR_HEIGHT = window.DiagramUtils.STICKY_BAR_HEIGHT;
         const MIN_CHIP_WIDTH = window.DiagramUtils.MIN_CHIP_WIDTH;
         const MAX_CHIP_WIDTH = window.DiagramUtils.MAX_CHIP_WIDTH;
@@ -111,6 +116,7 @@ export function buildDiagramsSplitPaneHtml(
         let splitStickyLanes = [];
         let splitStickySvgWidth = 0;
         let splitStickyHeaderH = 0;
+        let splitStickyCollapsed = false;
 
         function splitGetViewState(index) {
             if (!splitViewStates[index]) {
@@ -535,11 +541,36 @@ export function buildDiagramsSplitPaneHtml(
             splitSyncStickyBar();
         }
 
+        function splitUpdateStickyToggle(hasLanes) {
+            const toggle = document.getElementById('actor-sticky-toggle');
+            if (!toggle) return;
+            toggle.hidden = !hasLanes;
+            toggle.setAttribute('aria-pressed', splitStickyCollapsed ? 'false' : 'true');
+            toggle.title = splitStickyCollapsed ? 'Show lane bar' : 'Hide lane bar';
+            toggle.setAttribute('aria-label', splitStickyCollapsed ? 'Show lane bar' : 'Hide lane bar');
+            toggle.classList.toggle('off', splitStickyCollapsed);
+        }
+
+        function splitLayoutStickyChips(inner, fontSize) {
+            const chips = inner.children;
+            for (let i = 0; i < splitStickyLanes.length && i < chips.length; i++) {
+                const lane = splitStickyLanes[i];
+                const chip = chips[i];
+                const offset = Math.round(splitComputeChipCenterOffset(lane.cx, splitStickySvgWidth, splitCurrentZoom, splitPanX));
+                chip.style.left = 'calc(50% + ' + offset + 'px)';
+                chip.style.width = splitClampChipWidth(lane.width * splitCurrentZoom, 64, 220) + 'px';
+                chip.style.fontSize = fontSize + 'px';
+                chip.classList.toggle('active', !!splitSelectedName && splitIsSameDiagramName(lane.name, splitSelectedName));
+            }
+        }
+
         function splitSyncStickyBar() {
             const bar = document.getElementById('actor-sticky-bar');
             const inner = document.getElementById('actor-sticky-inner');
+            const hasLanes = splitStickyLanes.length > 0 && splitStickySvgWidth > 0;
+            splitUpdateStickyToggle(hasLanes);
             if (!bar || !inner) return;
-            if (splitStickyLanes.length === 0 || !(splitStickySvgWidth > 0)) {
+            if (!hasLanes) {
                 bar.hidden = true;
                 return;
             }
@@ -549,24 +580,24 @@ export function buildDiagramsSplitPaneHtml(
                 bar.hidden = true;
                 return;
             }
-            const show = splitShouldShowStickyHeader({
+            const barHeight = splitComputeStickyBarHeight(splitCurrentZoom);
+            const show = !splitStickyCollapsed && splitShouldShowStickyHeader({
                 panY: splitPanY,
                 svgHeight: base.h * splitCurrentZoom,
                 headerHeight: splitStickyHeaderH * splitCurrentZoom,
                 mainHeight: main.clientHeight,
-                barHeight: SPLIT_STICKY_BAR_HEIGHT,
+                barHeight: barHeight,
             });
             bar.hidden = !show;
             if (!show) return;
-            const chips = inner.children;
-            for (let i = 0; i < splitStickyLanes.length && i < chips.length; i++) {
-                const lane = splitStickyLanes[i];
-                const chip = chips[i];
-                const offset = Math.round(splitComputeChipCenterOffset(lane.cx, splitStickySvgWidth, splitCurrentZoom, splitPanX));
-                chip.style.left = 'calc(50% + ' + offset + 'px)';
-                chip.style.width = splitClampChipWidth(lane.width * splitCurrentZoom, 64, 220) + 'px';
-                chip.classList.toggle('active', !!splitSelectedName && splitIsSameDiagramName(lane.name, splitSelectedName));
-            }
+            bar.style.height = barHeight + 'px';
+            splitLayoutStickyChips(inner, splitComputeChipFontSize(splitCurrentZoom));
+        }
+
+        function splitToggleStickyBar(e) {
+            if (e && typeof e.stopPropagation === 'function') e.stopPropagation();
+            splitStickyCollapsed = !splitStickyCollapsed;
+            splitSyncStickyBar();
         }
 
         function splitCenterStickyLane(i) {

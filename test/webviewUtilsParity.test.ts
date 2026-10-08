@@ -4,7 +4,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as vm from 'node:vm';
 import { normalizeDiagramName, isSameDiagramName, extractClassIdName, isDragMovement } from '../src/core/diagramHighlight';
-import { shouldShowStickyHeader, computeChipCenterOffset, computeCenterPanX, clampChipWidth } from '../src/core/sequenceStickyHeader';
+import { shouldShowStickyHeader, computeChipCenterOffset, computeCenterPanX, clampChipWidth, computeChipFontSize, computeStickyBarHeight } from '../src/core/sequenceStickyHeader';
 import { resolveNavigationLine, NON_NAVIGABLE_SELECTOR } from '../src/core/clickNavigation';
 import { calculateNextChunkIndex, formatDiffCounter } from '../src/core/diffNavigator';
 
@@ -31,6 +31,8 @@ test('webview static utils stay in parity with core (no Function.toString embedd
             ['computeChipCenterOffset', [10, 100, 2, 5], computeChipCenterOffset(10, 100, 2, 5)],
             ['computeCenterPanX', [10, 100, 2], computeCenterPanX(10, 100, 2)],
             ['clampChipWidth', [10], clampChipWidth(10)],
+            ['computeChipFontSize', [2], computeChipFontSize(2)],
+            ['computeStickyBarHeight', [2], computeStickyBarHeight(2)],
         ];
         for (const [name, args, expected] of cases) {
             assert.deepStrictEqual(

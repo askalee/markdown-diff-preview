@@ -21,6 +21,11 @@ export interface StickyLane {
 export const STICKY_BAR_HEIGHT = 36;
 export const MIN_CHIP_WIDTH = 64;
 export const MAX_CHIP_WIDTH = 220;
+export const BASE_CHIP_FONT_SIZE = 12;
+export const MIN_CHIP_FONT_SIZE = 11;
+export const MAX_CHIP_FONT_SIZE = 18;
+export const MIN_STICKY_BAR_HEIGHT = 28;
+export const MAX_STICKY_BAR_HEIGHT = 64;
 
 /**
  * True when the real actor headers have scrolled under the sticky bar,
@@ -82,4 +87,36 @@ export function clampChipWidth(raw: number, min: number = MIN_CHIP_WIDTH, max: n
         return min;
     }
     return Math.min(max, Math.max(min, raw));
+}
+
+/** Chip font size follows zoom so the sticky bar scales with the diagram. */
+export function computeChipFontSize(
+    zoom: number,
+    base: number = BASE_CHIP_FONT_SIZE,
+    min: number = MIN_CHIP_FONT_SIZE,
+    max: number = MAX_CHIP_FONT_SIZE,
+): number {
+    if (!Number.isFinite(zoom) || !Number.isFinite(base)) {
+        return BASE_CHIP_FONT_SIZE;
+    }
+    if (!Number.isFinite(min) || !Number.isFinite(max)) {
+        return BASE_CHIP_FONT_SIZE;
+    }
+    return Math.min(max, Math.max(min, base * zoom));
+}
+
+/** Sticky bar height follows zoom; clamped so it never collapses or dominates. */
+export function computeStickyBarHeight(
+    zoom: number,
+    base: number = STICKY_BAR_HEIGHT,
+    min: number = MIN_STICKY_BAR_HEIGHT,
+    max: number = MAX_STICKY_BAR_HEIGHT,
+): number {
+    if (!Number.isFinite(zoom) || !Number.isFinite(base)) {
+        return STICKY_BAR_HEIGHT;
+    }
+    if (!Number.isFinite(min) || !Number.isFinite(max)) {
+        return STICKY_BAR_HEIGHT;
+    }
+    return Math.round(Math.min(max, Math.max(min, base * zoom)));
 }

@@ -73,7 +73,7 @@ export function parseDiff(filePath: string, diffOutput: string): FileDiff {
             if (isCommentOnlyChange) {
                 // This is only a comment marker change - don't mark as added diff
                 // Remove the last pending removal since it's being "replaced" by essentially the same content
-                const removedContent = pendingRemovals.pop()!;
+                pendingRemovals.pop();
                 // Treat as context (unchanged) for diff display purposes
                 // But we need to track the line number correctly
                 currentHunk.changes.push({

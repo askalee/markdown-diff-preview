@@ -448,7 +448,7 @@ export async function renderMarkdownWithDiff(
         return line
             .split('|')
             .map(cell => cell.trim())
-            .filter((cell, idx, arr) => idx !== 0 || cell !== '')
+            .filter((cell, idx) => idx !== 0 || cell !== '')
             .filter((cell, idx, arr) => idx !== arr.length - 1 || cell !== '');
     };
 
@@ -483,7 +483,6 @@ export async function renderMarkdownWithDiff(
             );
             const allRowsAdded = contentRows.length > 0 && 
                 contentRows.every(({ lineNumber }) => addedLines.has(lineNumber));
-            const someRowsAdded = contentRows.some(({ lineNumber }) => addedLines.has(lineNumber));
 
             let tableHtml = '<table>';
             let isHeader = true;
@@ -847,7 +846,7 @@ export async function renderMarkdownWithDiff(
         if (line.startsWith('>')) {
             flushList();
             flushTable();
-            let quoteContent = line.slice(1).trim().replace(/^<!--comment:\d+-->\s*/, '');
+            const quoteContent = line.slice(1).trim().replace(/^<!--comment:\d+-->\s*/, '');
             const content = parseInline(quoteContent, line, lineNumber);
             const quoteHtml = `<blockquote><p>${content}</p></blockquote>`;
             html += wrapWithDiff(quoteHtml, lineNumber, true);
@@ -892,7 +891,7 @@ export async function renderMarkdownWithDiff(
         flushList();
         flushTable();
         // Remove block comment markers from paragraph line
-        let paragraphLine = line.replace(/^<!--comment:\d+-->\s*/, '').trim();
+        const paragraphLine = line.replace(/^<!--comment:\d+-->\s*/, '').trim();
         const content = parseInline(paragraphLine, line, lineNumber);
         const pHtml = `<p>${content}</p>`;
         html += wrapWithDiff(pHtml, lineNumber, true);

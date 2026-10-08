@@ -17,6 +17,11 @@
     var STICKY_BAR_HEIGHT = 36;
     var MIN_CHIP_WIDTH = 64;
     var MAX_CHIP_WIDTH = 220;
+    var BASE_CHIP_FONT_SIZE = 12;
+    var MIN_CHIP_FONT_SIZE = 11;
+    var MAX_CHIP_FONT_SIZE = 18;
+    var MIN_STICKY_BAR_HEIGHT = 28;
+    var MAX_STICKY_BAR_HEIGHT = 64;
 
     function normalizeDiagramName(raw) {
         if (!raw) return '';
@@ -83,6 +88,32 @@
         return Math.min(max, Math.max(min, raw));
     }
 
+    function computeChipFontSize(zoom, base, min, max) {
+        if (base === undefined) base = BASE_CHIP_FONT_SIZE;
+        if (min === undefined) min = MIN_CHIP_FONT_SIZE;
+        if (max === undefined) max = MAX_CHIP_FONT_SIZE;
+        if (!Number.isFinite(zoom) || !Number.isFinite(base)) {
+            return BASE_CHIP_FONT_SIZE;
+        }
+        if (!Number.isFinite(min) || !Number.isFinite(max)) {
+            return BASE_CHIP_FONT_SIZE;
+        }
+        return Math.min(max, Math.max(min, base * zoom));
+    }
+
+    function computeStickyBarHeight(zoom, base, min, max) {
+        if (base === undefined) base = STICKY_BAR_HEIGHT;
+        if (min === undefined) min = MIN_STICKY_BAR_HEIGHT;
+        if (max === undefined) max = MAX_STICKY_BAR_HEIGHT;
+        if (!Number.isFinite(zoom) || !Number.isFinite(base)) {
+            return STICKY_BAR_HEIGHT;
+        }
+        if (!Number.isFinite(min) || !Number.isFinite(max)) {
+            return STICKY_BAR_HEIGHT;
+        }
+        return Math.round(Math.min(max, Math.max(min, base * zoom)));
+    }
+
     global.DiagramUtils = {
         CLASS_NODE_SELECTOR: CLASS_NODE_SELECTOR,
         ACTOR_HEADER_SELECTOR: ACTOR_HEADER_SELECTOR,
@@ -90,6 +121,11 @@
         STICKY_BAR_HEIGHT: STICKY_BAR_HEIGHT,
         MIN_CHIP_WIDTH: MIN_CHIP_WIDTH,
         MAX_CHIP_WIDTH: MAX_CHIP_WIDTH,
+        BASE_CHIP_FONT_SIZE: BASE_CHIP_FONT_SIZE,
+        MIN_CHIP_FONT_SIZE: MIN_CHIP_FONT_SIZE,
+        MAX_CHIP_FONT_SIZE: MAX_CHIP_FONT_SIZE,
+        MIN_STICKY_BAR_HEIGHT: MIN_STICKY_BAR_HEIGHT,
+        MAX_STICKY_BAR_HEIGHT: MAX_STICKY_BAR_HEIGHT,
         normalizeDiagramName: normalizeDiagramName,
         isSameDiagramName: isSameDiagramName,
         extractClassIdName: extractClassIdName,
@@ -98,5 +134,7 @@
         computeChipCenterOffset: computeChipCenterOffset,
         computeCenterPanX: computeCenterPanX,
         clampChipWidth: clampChipWidth,
+        computeChipFontSize: computeChipFontSize,
+        computeStickyBarHeight: computeStickyBarHeight,
     };
 })(typeof window !== 'undefined' ? window : globalThis);

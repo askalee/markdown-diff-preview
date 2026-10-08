@@ -1856,8 +1856,8 @@ body.diagrams-view-body {
 
 .actor-sticky-chip {
     position: absolute;
-    top: 5px;
-    transform: translateX(-50%);
+    top: 50%;
+    transform: translate(-50%, -50%);
     background: var(--bg-tertiary);
     border: 1px solid var(--border-color);
     color: var(--text-secondary);
@@ -1872,6 +1872,10 @@ body.diagrams-view-body {
     cursor: pointer;
     user-select: none;
     -webkit-user-select: none;
+}
+
+.actor-sticky-toggle.off {
+    opacity: 0.55;
 }
 
 .actor-sticky-chip:hover {

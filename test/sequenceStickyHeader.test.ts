@@ -7,6 +7,8 @@ import {
     computeChipCenterOffset,
     computeCenterPanX,
     clampChipWidth,
+    computeChipFontSize,
+    computeStickyBarHeight,
 } from '../src/core/sequenceStickyHeader';
 
 describe('sequenceStickyHeader visibility', () => {
@@ -68,6 +70,20 @@ describe('sequenceStickyHeader geometry', () => {
         assert.strictEqual(clampChipWidth(150), 150);
         assert.strictEqual(clampChipWidth(2000), 220);
     });
+
+    test('chip font size follows zoom with clamps', () => {
+        assert.strictEqual(computeChipFontSize(1), 12);
+        assert.strictEqual(computeChipFontSize(0.2), 11);
+        assert.strictEqual(computeChipFontSize(2), 18);
+        assert.strictEqual(computeChipFontSize(NaN), 12);
+    });
+
+    test('sticky bar height follows zoom with clamps', () => {
+        assert.strictEqual(computeStickyBarHeight(1), 36);
+        assert.strictEqual(computeStickyBarHeight(0.2), 28);
+        assert.strictEqual(computeStickyBarHeight(2), 64);
+        assert.strictEqual(computeStickyBarHeight(NaN), 36);
+    });
 });
 
 describe('sequenceStickyHeader webview wiring', () => {
@@ -80,9 +96,21 @@ describe('sequenceStickyHeader webview wiring', () => {
         assert.ok(panel.includes('StickyBar'), 'must sync the bar on pan/zoom/tab switch');
     });
 
+    test('sticky bar supports zoom-scaled height/font and manual hide', () => {
+        const panel = readFileSync(
+            join(__dirname, '..', 'src', 'splitDiagramsPane.ts'),
+            'utf-8',
+        );
+        assert.ok(panel.includes('actor-sticky-toggle'), 'must render a hide/show toggle');
+        assert.ok(panel.includes('computeStickyBarHeight'), 'must scale bar height with zoom');
+        assert.ok(panel.includes('computeChipFontSize'), 'must scale chip font with zoom');
+        assert.ok(panel.includes('splitStickyCollapsed'), 'must respect manual hide');
+    });
+
     test('sticky bar styles exist and overlay the top without page scroll', () => {
         const css = readFileSync(join(__dirname, '..', 'media', 'styles.css'), 'utf-8');
         assert.ok(css.includes('.actor-sticky-bar'), 'must define .actor-sticky-bar rules');
         assert.ok(css.includes('.actor-sticky-chip'), 'must define chip rules');
+        assert.ok(css.includes('.actor-sticky-toggle'), 'must define toggle rules');
     });
 });

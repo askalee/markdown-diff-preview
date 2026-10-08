@@ -225,11 +225,12 @@ export class MarkdownDiffPreviewPanel {
                 updatedLineText = lineText.replace(`\`${originalText}\``, `\`${newText}\``);
                 break;
                 
-            case 'a':
+            case 'a': {
                 // Replace link text [originalText](url) with [newText](url)
                 const linkRegex = new RegExp(`\\[${this._escapeRegex(originalText)}\\]\\(([^)]+)\\)`);
                 updatedLineText = lineText.replace(linkRegex, `[${newText}]($1)`);
                 break;
+            }
                 
             case 'td':
             case 'th':
@@ -244,7 +245,7 @@ export class MarkdownDiffPreviewPanel {
                 updatedLineText = this._replaceUnformattedText(lineText, originalText, newText);
                 break;
                 
-            default:
+            default: {
                 // For plain elements (p, h1-h6, li), replace the content but preserve prefixes
                 const headerMatch = lineText.match(/^(#{1,6}\s+)/);
                 const listMatch = lineText.match(/^(\s*[-*+]\s+)/);
@@ -263,6 +264,7 @@ export class MarkdownDiffPreviewPanel {
                     updatedLineText = newText;
                 }
                 break;
+            }
         }
 
         // Only apply if there's a change
@@ -307,21 +309,6 @@ export class MarkdownDiffPreviewPanel {
     private _replaceUnformattedText(lineText: string, originalText: string, newText: string): string {
         // Replace text that's NOT inside markdown formatting
         // We need to be careful not to replace text that's inside **...**, *...*, etc.
-        
-        const escapedOriginal = this._escapeRegex(originalText);
-        
-        // Try to find the text that's not wrapped in formatting markers
-        // This regex looks for the text not preceded/followed by formatting chars
-        const patterns = [
-            // Not inside bold
-            `(?<!\\*\\*)${escapedOriginal}(?!\\*\\*)`,
-            // Not inside italic (single asterisk)
-            `(?<!\\*)${escapedOriginal}(?!\\*)`,
-            // Not inside code
-            `(?<!\`)${escapedOriginal}(?!\`)`,
-            // Not inside strikethrough
-            `(?<!~~)${escapedOriginal}(?!~~)`
-        ];
         
         // Simple approach: just replace if found and not inside formatting
         // Check if the original text exists outside of formatting
@@ -534,7 +521,6 @@ export class MarkdownDiffPreviewPanel {
     ): Promise<string> {
         const config = vscode.workspace.getConfiguration('markdownDiffPreview');
         const showLineNumbers = config.get<boolean>('showLineNumbers', true);
-        const highlightStyle = config.get<string>('highlightStyle', 'both');
         const diffBase = config.get<string>('diffBase', 'HEAD');
         const enableWordDiff = config.get<boolean>('enableWordDiff', true);
         const enableMath = config.get<boolean>('enableMath', true);

@@ -14,6 +14,8 @@ const SHARED_HELPERS = [
     'computeChipCenterOffset',
     'computeCenterPanX',
     'clampChipWidth',
+    'computeChipFontSize',
+    'computeStickyBarHeight',
     'STICKY_BAR_HEIGHT',
     'MIN_CHIP_WIDTH',
     'MAX_CHIP_WIDTH',
