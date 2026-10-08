@@ -56,3 +56,12 @@ Do not judge layout/CSS fixes by reasoning alone. Any change affecting rendered 
 3. Measure objectively: inject a script that dumps `getBoundingClientRect()` of the relevant elements and assert no overlap (e.g. write results to `document.title` and read them via `--dump-dom`).
 4. Look with your own eyes: read the screenshot image yourself and confirm the layout matches the requirement.
 5. Re-verify after every CSS revision; a "theoretically correct" fix that still overlaps on screen is not done.
+
+## 7. Release Conventions
+
+1. "Install" means installing the packaged `.vsix` into the VS Code-compatible editors available on the current machine. Do not assume a fixed set of editors (it varies per machine and may include VS Code, Cursor, Windsurf, Trae, Antigravity, VSCodium, Kiro, and others).
+2. Detect candidates with `node scripts/install-vsix.mjs --list`. It probes the known editor CLIs found on `PATH`. Probe additional CLIs with `EXTRA_VSCODE_CLIS="cli-a,cli-b"`.
+3. Install with the interactive picker: `node scripts/install-vsix.mjs [<vsix>]` (or `npm run install:vsix -- [<vsix>]`). With no `<vsix>` argument the newest `*.vsix` in the repo root is used. The picker lists every detected editor by number and name; the operator may choose all editors or any subset. Non-interactive installs use `--all` (every detected editor) or `--editors <cli1,cli2>` (an explicit subset).
+4. Verify every install target with `<cli> --list-extensions --show-versions | grep markdown-diff`. The installer script already runs this check per target and reports failures.
+5. `*.vsix` is gitignored; never commit it.
+6. Never commit or push code on your own initiative; only commit/push when the user explicitly asks.
