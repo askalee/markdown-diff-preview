@@ -1858,9 +1858,9 @@ body.diagrams-view-body {
     position: absolute;
     top: 50%;
     transform: translate(-50%, -50%);
-    background: var(--bg-tertiary);
-    border: 1px solid var(--border-color);
-    color: var(--text-secondary);
+    background: var(--chip-bg, var(--bg-tertiary));
+    border: 1px solid var(--chip-border, var(--border-color));
+    color: var(--chip-fg, var(--text-primary));
     padding: 3px 8px;
     border-radius: 6px;
     font-size: 12px;

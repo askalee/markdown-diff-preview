@@ -7,6 +7,8 @@ import {
     computeChipCenterOffset,
     computeCenterPanX,
     clampChipWidth,
+    computeLaneChipWidth,
+    pickChipColorValue,
     computeChipFontSize,
     computeStickyBarHeight,
 } from '../src/core/sequenceStickyHeader';
@@ -68,7 +70,7 @@ describe('sequenceStickyHeader geometry', () => {
     test('chip width is clamped for readability', () => {
         assert.strictEqual(clampChipWidth(10), 64);
         assert.strictEqual(clampChipWidth(150), 150);
-        assert.strictEqual(clampChipWidth(2000), 220);
+        assert.strictEqual(clampChipWidth(2000), 480);
     });
 
     test('chip font size follows zoom with clamps', () => {
@@ -83,6 +85,49 @@ describe('sequenceStickyHeader geometry', () => {
         assert.strictEqual(computeStickyBarHeight(0.2), 28);
         assert.strictEqual(computeStickyBarHeight(2), 64);
         assert.strictEqual(computeStickyBarHeight(NaN), 36);
+    });
+});
+
+describe('sequenceStickyHeader chip colors', () => {
+    test('passes through usable sampled colors', () => {
+        assert.strictEqual(pickChipColorValue('rgb(230, 237, 243)'), 'rgb(230, 237, 243)');
+        assert.strictEqual(pickChipColorValue('  #e6edf3  '), '#e6edf3');
+    });
+
+    test('rejects empty/transparent/none samples', () => {
+        assert.strictEqual(pickChipColorValue(''), null);
+        assert.strictEqual(pickChipColorValue('   '), null);
+        assert.strictEqual(pickChipColorValue('none'), null);
+        assert.strictEqual(pickChipColorValue('transparent'), null);
+        assert.strictEqual(pickChipColorValue('rgba(0, 0, 0, 0)'), null);
+        assert.strictEqual(pickChipColorValue(null), null);
+        assert.strictEqual(pickChipColorValue(undefined), null);
+    });
+});
+
+describe('sequenceStickyHeader lane chip width', () => {
+    test('zoomed lane width is no longer capped at 220', () => {
+        // lane 150 units at zoom 2 with a generous neighbor gap: desired 316
+        assert.strictEqual(computeLaneChipWidth(150, 2, 400), 316);
+    });
+
+    test('width follows neighbor gap to avoid overlap', () => {
+        // neighbors 100 units away at zoom 1: available 88 wins over desired 166
+        assert.strictEqual(computeLaneChipWidth(150, 1, 100), 88);
+    });
+
+    test('crowded lanes shrink below minimum instead of overlapping', () => {
+        assert.strictEqual(computeLaneChipWidth(150, 1, 60), 48);
+    });
+
+    test('single lane uses full header width up to the safety cap', () => {
+        assert.strictEqual(computeLaneChipWidth(150, 1, Infinity), 166);
+        assert.strictEqual(computeLaneChipWidth(2000, 1, Infinity), 480);
+    });
+
+    test('invalid inputs fall back to sane widths', () => {
+        assert.strictEqual(computeLaneChipWidth(NaN, 1, 400), 64);
+        assert.strictEqual(computeLaneChipWidth(150, NaN, 400), 166);
     });
 });
 
@@ -105,6 +150,28 @@ describe('sequenceStickyHeader webview wiring', () => {
         assert.ok(panel.includes('computeStickyBarHeight'), 'must scale bar height with zoom');
         assert.ok(panel.includes('computeChipFontSize'), 'must scale chip font with zoom');
         assert.ok(panel.includes('splitStickyCollapsed'), 'must respect manual hide');
+    });
+
+    test('sticky bar chips sample original header colors', () => {
+        const panel = readFileSync(
+            join(__dirname, '..', 'src', 'splitDiagramsPane.ts'),
+            'utf-8',
+        );
+        assert.ok(panel.includes('--chip-fg'), 'must apply the sampled text color');
+        assert.ok(panel.includes('pickChipColorValue'), 'must validate sampled colors');
+        assert.ok(panel.includes('tspan'), 'must sample the tspan fill (mermaid colors text.actor>tspan, text inherits the dark box fill)');
+        const css = readFileSync(join(__dirname, '..', 'media', 'styles.css'), 'utf-8');
+        assert.ok(css.includes('--chip-fg'), 'chip color must come from the sampled variable');
+        const chipRule = css.match(/\.actor-sticky-chip\s*\{[^}]*\}/)?.[0] ?? '';
+        assert.ok(!chipRule.includes('text-secondary'), 'chip must not use the dim secondary text');
+    });
+
+    test('sticky bar chips size from neighbor gaps', () => {
+        const panel = readFileSync(
+            join(__dirname, '..', 'src', 'splitDiagramsPane.ts'),
+            'utf-8',
+        );
+        assert.ok(panel.includes('computeLaneChipWidth'), 'must size chips from neighbor gaps');
     });
 
     test('sticky bar styles exist and overlay the top without page scroll', () => {

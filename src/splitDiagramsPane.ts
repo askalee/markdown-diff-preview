@@ -94,6 +94,8 @@ export function buildDiagramsSplitPaneHtml(
         const splitComputeChipCenterOffset = window.DiagramUtils.computeChipCenterOffset;
         const splitComputeCenterPanX = window.DiagramUtils.computeCenterPanX;
         const splitClampChipWidth = window.DiagramUtils.clampChipWidth;
+        const splitPickChipColorValue = window.DiagramUtils.pickChipColorValue;
+        const splitComputeLaneChipWidth = window.DiagramUtils.computeLaneChipWidth;
         const splitComputeChipFontSize = window.DiagramUtils.computeChipFontSize;
         const splitComputeStickyBarHeight = window.DiagramUtils.computeStickyBarHeight;
         // Aliases for helper bodies that reference their original sibling
@@ -106,6 +108,8 @@ export function buildDiagramsSplitPaneHtml(
         const computeChipCenterOffset = splitComputeChipCenterOffset;
         const computeCenterPanX = splitComputeCenterPanX;
         const clampChipWidth = splitClampChipWidth;
+        const pickChipColorValue = splitPickChipColorValue;
+        const computeLaneChipWidth = splitComputeLaneChipWidth;
         const computeChipFontSize = splitComputeChipFontSize;
         const computeStickyBarHeight = splitComputeStickyBarHeight;
         const STICKY_BAR_HEIGHT = window.DiagramUtils.STICKY_BAR_HEIGHT;
@@ -437,7 +441,29 @@ export function buildDiagramsSplitPaneHtml(
             return isFinite(cx) ? { cx: cx, top: top, bottom: bottom, width: w } : null;
         }
 
-        function splitMeasureLaneLabel(t, rectBoxes, midY, minX, seenNames) {
+        function splitSampleElementPaint(el, property) {
+            try {
+                if (!el) return null;
+                let computed = '';
+                if (typeof getComputedStyle === 'function') {
+                    computed = getComputedStyle(el)[property] || '';
+                }
+                const picked = splitPickChipColorValue(computed);
+                if (picked) return picked;
+                const attr = typeof el.getAttribute === 'function' ? el.getAttribute(property) : '';
+                return splitPickChipColorValue(attr);
+            } catch (e) { return null; }
+        }
+
+        function splitSampleTextFill(t) {
+            // Mermaid paints sequence labels on text.actor>tspan; the <text>
+            // itself inherits the dark actor box fill, so sample the tspan.
+            let inner = null;
+            try { inner = t ? t.querySelector('tspan') : null; } catch (e) { inner = null; }
+            return splitSampleElementPaint(inner || t, 'fill');
+        }
+
+        function splitMeasureLaneLabel(t, rectBoxes, rectEls, midY, minX, seenNames) {
             const rawName = t.textContent || '';
             if (!splitNormalizeDiagramName(rawName)) return null;
             const box = splitMeasureActorBox(t, false);
@@ -448,19 +474,29 @@ export function buildDiagramsSplitPaneHtml(
             const xAttr = parseFloat(t.getAttribute('x') || '');
             let cx = box.cx;
             let width = box.width + 28;
+            let matchedRect = null;
             for (let i = 0; i < rectBoxes.length; i++) {
                 if (rectBoxes[i].top < midY
                     && (Math.abs(rectBoxes[i].cx - box.cx) <= 12
                         || (isFinite(xAttr) && Math.abs(rectBoxes[i].cx - xAttr) <= 2))) {
                     cx = rectBoxes[i].cx;
                     width = rectBoxes[i].width;
+                    matchedRect = rectEls[i] || null;
                     break;
                 }
             }
             if (cx === box.cx && isFinite(xAttr) && Math.abs(xAttr - box.cx) <= 12) {
                 cx = xAttr;
             }
-            return { name: rawName.trim(), cx: cx - minX, width: width, bottom: box.bottom };
+            return {
+                name: rawName.trim(),
+                cx: cx - minX,
+                width: width,
+                bottom: box.bottom,
+                fg: splitSampleTextFill(t),
+                bg: splitSampleElementPaint(matchedRect, 'fill'),
+                border: splitSampleElementPaint(matchedRect, 'stroke'),
+            };
         }
 
         function splitMeasureStickyLanes(svg) {
@@ -481,9 +517,10 @@ export function buildDiagramsSplitPaneHtml(
             }
             const midY = minY + svgH / 2;
             const rectBoxes = [];
+            const rectEls = [];
             svg.querySelectorAll('rect.actor').forEach((r) => {
                 const box = splitMeasureActorBox(r, true);
-                if (box) rectBoxes.push(box);
+                if (box) { rectBoxes.push(box); rectEls.push(r); }
             });
             const seenNames = {};
             const lanes = [];
@@ -492,7 +529,7 @@ export function buildDiagramsSplitPaneHtml(
                 if (rb.top < midY && rb.bottom > headerBottom) headerBottom = rb.bottom;
             });
             svg.querySelectorAll('text.actor').forEach((t) => {
-                const lane = splitMeasureLaneLabel(t, rectBoxes, midY, minX, seenNames);
+                const lane = splitMeasureLaneLabel(t, rectBoxes, rectEls, midY, minX, seenNames);
                 if (!lane) return;
                 lanes.push(lane);
                 if (lane.bottom > headerBottom) headerBottom = lane.bottom;
@@ -532,6 +569,9 @@ export function buildDiagramsSplitPaneHtml(
                 chip.textContent = lane.name;
                 chip.title = lane.name;
                 chip.setAttribute('aria-label', 'Center lane ' + lane.name);
+                if (lane.fg) chip.style.setProperty('--chip-fg', lane.fg);
+                if (lane.bg) chip.style.setProperty('--chip-bg', lane.bg);
+                if (lane.border) chip.style.setProperty('--chip-border', lane.border);
                 chip.addEventListener('click', (e) => {
                     e.stopPropagation();
                     splitCenterStickyLane(i);
@@ -557,8 +597,10 @@ export function buildDiagramsSplitPaneHtml(
                 const lane = splitStickyLanes[i];
                 const chip = chips[i];
                 const offset = Math.round(splitComputeChipCenterOffset(lane.cx, splitStickySvgWidth, splitCurrentZoom, splitPanX));
+                const leftGap = i > 0 ? lane.cx - splitStickyLanes[i - 1].cx : Infinity;
+                const rightGap = i < splitStickyLanes.length - 1 ? splitStickyLanes[i + 1].cx - lane.cx : Infinity;
                 chip.style.left = 'calc(50% + ' + offset + 'px)';
-                chip.style.width = splitClampChipWidth(lane.width * splitCurrentZoom, 64, 220) + 'px';
+                chip.style.width = splitComputeLaneChipWidth(lane.width, splitCurrentZoom, Math.min(leftGap, rightGap)) + 'px';
                 chip.style.fontSize = fontSize + 'px';
                 chip.classList.toggle('active', !!splitSelectedName && splitIsSameDiagramName(lane.name, splitSelectedName));
             }

@@ -16,11 +16,20 @@ export interface StickyLane {
     cx: number;
     /** Header width in intrinsic SVG units. */
     width: number;
+    /** Sampled text fill of the original header (unset when unavailable). */
+    fg?: string;
+    /** Sampled box fill of the original header (unset when unavailable). */
+    bg?: string;
+    /** Sampled box stroke of the original header (unset when unavailable). */
+    border?: string;
 }
 
 export const STICKY_BAR_HEIGHT = 36;
 export const MIN_CHIP_WIDTH = 64;
-export const MAX_CHIP_WIDTH = 220;
+export const MAX_CHIP_WIDTH = 480;
+export const CHIP_WIDTH_PADDING = 16;
+export const CHIP_LANE_GAP = 12;
+export const ABSOLUTE_MIN_CHIP_WIDTH = 24;
 export const BASE_CHIP_FONT_SIZE = 12;
 export const MIN_CHIP_FONT_SIZE = 11;
 export const MAX_CHIP_FONT_SIZE = 18;
@@ -87,6 +96,52 @@ export function clampChipWidth(raw: number, min: number = MIN_CHIP_WIDTH, max: n
         return min;
     }
     return Math.min(max, Math.max(min, raw));
+}
+
+/**
+ * Usable sampled SVG paint, or null when the sample carries no color.
+ * Rejects empty / none / transparent samples so callers fall back to CSS.
+ */
+export function pickChipColorValue(sampled: unknown): string | null {
+    if (typeof sampled !== 'string') {
+        return null;
+    }
+    const trimmed = sampled.trim();
+    if (trimmed.length === 0) {
+        return null;
+    }
+    const compact = trimmed.toLowerCase().replace(/\s+/g, '');
+    if (compact === 'none' || compact === 'transparent' || compact === 'rgba(0,0,0,0)') {
+        return null;
+    }
+    return trimmed;
+}
+
+/**
+ * Chip width from the lane's own scaled header width, bounded by the
+ * scaled gap to the nearest neighbor lane so chips never overlap.
+ * Crowded lanes shrink below the minimum (ellipsis + tooltip) instead
+ * of overlapping; a lone lane grows up to the safety cap.
+ */
+export function computeLaneChipWidth(
+    laneWidth: number,
+    zoom: number,
+    neighborGap: number,
+    min: number = MIN_CHIP_WIDTH,
+    max: number = MAX_CHIP_WIDTH,
+    padding: number = CHIP_WIDTH_PADDING,
+    gap: number = CHIP_LANE_GAP,
+): number {
+    const safeWidth = Number.isFinite(laneWidth) && laneWidth > 0 ? laneWidth : 0;
+    const safeZoom = Number.isFinite(zoom) && zoom > 0 ? zoom : 1;
+    const desired = safeWidth * safeZoom + padding;
+    const available = Number.isFinite(neighborGap) && neighborGap > 0
+        ? Math.min(neighborGap * safeZoom - gap, max)
+        : max;
+    if (available < min) {
+        return Math.max(available, ABSOLUTE_MIN_CHIP_WIDTH);
+    }
+    return Math.min(Math.max(desired, min), available);
 }
 
 /** Chip font size follows zoom so the sticky bar scales with the diagram. */
