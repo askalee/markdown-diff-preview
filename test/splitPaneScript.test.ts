@@ -1,6 +1,8 @@
 import { test, describe } from 'node:test';
 import * as assert from 'node:assert';
 import * as vm from 'node:vm';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { buildDiagramsSplitPaneHtml } from '../src/splitDiagramsPane';
 
 const SHARED_HELPERS = [
@@ -60,6 +62,9 @@ function runHelpersInSandbox(): vm.Context {
     };
     sandbox.globalThis = sandbox;
     const ctx = vm.createContext(sandbox);
+    // Mirror webview load order: static utils first (<head>), pane script after.
+    const utilsSrc = readFileSync(join(__dirname, '..', 'media', 'diagram-utils.js'), 'utf-8');
+    vm.runInContext(utilsSrc, ctx, { filename: 'diagram-utils.js' });
     vm.runInContext(
         `${script}\n;globalThis.__splitTest = { splitIsSameDiagramName, splitClampChipWidth, splitShouldShowStickyHeader };`,
         ctx,

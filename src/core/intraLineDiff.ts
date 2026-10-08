@@ -3,28 +3,14 @@
  * Pure TypeScript, no VS Code dependencies - safe for Node.js & browser.
  */
 
+import { escapeHtml, escapeAttr } from './html';
+import { WORD_DIFF_THRESHOLD } from './constants';
+
 export interface IntraLineDiffResult {
     hasWordDiff: boolean;
     oldLinePrepared: string;
     newLinePrepared: string;
     placeholders: string[];
-}
-
-function escapeHtml(text: string): string {
-    return text
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#039;');
-}
-
-function escapeAttr(text: string): string {
-    return text
-        .replace(/&/g, '&amp;')
-        .replace(/"/g, '&quot;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;');
 }
 
 /**
@@ -104,7 +90,7 @@ export function computeIntraLineDiff(
     oldLine: string,
     newLine: string,
     lineId: number = 1,
-    threshold: number = 0.7
+    threshold: number = WORD_DIFF_THRESHOLD
 ): IntraLineDiffResult {
     // If identical, no word diff needed
     if (oldLine === newLine) {

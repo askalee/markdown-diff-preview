@@ -4,7 +4,6 @@ import { getGitDiff, getGitBranch, getGitStatus, FileDiff } from './gitDiff';
 import { renderMarkdownWithDiff } from './core/markdownRenderer';
 import { DEFAULT_VIEW_MODE, ViewMode, isViewMode, resolveEffectiveDiff, shouldShowDiffChrome } from './core/viewMode';
 import { parseCommentsData } from './core/commentParser';
-import { resolveNavigationLine, NON_NAVIGABLE_SELECTOR } from './core/clickNavigation';
 import { extractDiagrams } from './core/extractDiagrams';
 import { filterClassDiagram } from './core/classDiagramDetail';
 import { buildDiagramsSplitPaneHtml } from './splitDiagramsPane';
@@ -587,6 +586,12 @@ export class MarkdownDiffPreviewPanel {
         const mermaidUri = this._panel.webview.asWebviewUri(
             vscode.Uri.joinPath(this._extensionUri, 'media', 'mermaid.min.js')
         );
+        const diagramUtilsUri = this._panel.webview.asWebviewUri(
+            vscode.Uri.joinPath(this._extensionUri, 'media', 'diagram-utils.js')
+        );
+        const previewNavUri = this._panel.webview.asWebviewUri(
+            vscode.Uri.joinPath(this._extensionUri, 'media', 'preview-nav.js')
+        );
 
         return `<!DOCTYPE html>
 <html lang="en">
@@ -598,6 +603,8 @@ export class MarkdownDiffPreviewPanel {
     <link rel="stylesheet" href="${stylesUri}">
     <link rel="stylesheet" href="${katexUri}">
     <script src="${mermaidUri}"></script>
+    <script src="${diagramUtilsUri}"></script>
+    <script src="${previewNavUri}"></script>
 </head>
 <body class="view-mode-${this._viewMode} split-view-body">
     <div class="header">
@@ -653,8 +660,11 @@ export class MarkdownDiffPreviewPanel {
 
     <script>
         const vscode = acquireVsCodeApi();
-        const NON_NAVIGABLE_SELECTOR = ${JSON.stringify(NON_NAVIGABLE_SELECTOR)};
-        const resolveNavigationLine = ${resolveNavigationLine.toString()};
+        // Navigation guard lives in media/preview-nav.js (loaded in <head>).
+        // Do NOT re-embed it with Function.toString(); parity is covered by
+        // test/webviewUtilsParity.test.ts.
+        const NON_NAVIGABLE_SELECTOR = window.PreviewNav.NON_NAVIGABLE_SELECTOR;
+        const resolveNavigationLine = window.PreviewNav.resolveNavigationLine;
         window.initialViewMode = '${this._viewMode}';
 
         function switchViewMode(mode) {
@@ -1201,7 +1211,7 @@ export class MarkdownDiffPreviewPanel {
             if (!counterEl || !prevBtn || !nextBtn) return;
 
             if (chunks.length === 0) {
-                counterEl.textContent = '0 / 0';
+                counterEl.textContent = window.PreviewNav.formatDiffCounter(0, 0);
                 prevBtn.disabled = true;
                 nextBtn.disabled = true;
                 return;
@@ -1210,11 +1220,7 @@ export class MarkdownDiffPreviewPanel {
             prevBtn.disabled = false;
             nextBtn.disabled = false;
 
-            if (currentDiffChunkIndex >= 0 && currentDiffChunkIndex < chunks.length) {
-                counterEl.textContent = (currentDiffChunkIndex + 1) + ' / ' + chunks.length;
-            } else {
-                counterEl.textContent = '- / ' + chunks.length;
-            }
+            counterEl.textContent = window.PreviewNav.formatDiffCounter(currentDiffChunkIndex, chunks.length);
         }
 
         function highlightDiffChunk(chunk) {
@@ -1235,18 +1241,8 @@ export class MarkdownDiffPreviewPanel {
             }, 1500);
         }
 
-        function calculateNextChunkIndex(currentIndex, totalChunks, direction) {
-            if (totalChunks <= 0) return -1;
-            if (totalChunks === 1) return 0;
-            if (currentIndex < 0) {
-                return direction === 'next' ? 0 : totalChunks - 1;
-            }
-            if (direction === 'next') {
-                return (currentIndex + 1) % totalChunks;
-            } else {
-                return (currentIndex - 1 + totalChunks) % totalChunks;
-            }
-        }
+        // Shared with core/diffNavigator.ts via media/preview-nav.js.
+        const calculateNextChunkIndex = window.PreviewNav.calculateNextChunkIndex;
 
         let isProgrammaticScroll = false;
         let programmaticScrollTimeout = null;
@@ -1775,9 +1771,9 @@ export class MarkdownDiffPreviewPanel {
         this._panel.dispose();
 
         while (this._disposables.length) {
-            const x = this._disposables.pop();
-            if (x) {
-                x.dispose();
+            const disposable = this._disposables.pop();
+            if (disposable) {
+                disposable.dispose();
             }
         }
     }

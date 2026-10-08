@@ -1,7 +1,7 @@
 /**
  * Sequence sticky-header helpers - no VS Code / DOM dependencies.
- * Pure geometry used by the Diagrams view webview (embedded via
- * Function.toString()) and unit-tested here in Node.
+ * Pure geometry used by the Diagrams view webview (via the plain-JS mirror
+ * media/diagram-utils.js, loaded with <script src>) and unit-tested here in Node.
  *
  * Coordinate model: the SVG is centered in #diagrams-view-main and moved
  * by translate(panX, panY). The sticky bar overlays the top `barHeight` px

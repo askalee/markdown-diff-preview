@@ -1,7 +1,7 @@
 /**
  * Diagram cross-highlight helpers - no VS Code / DOM dependencies.
- * Used by the Diagrams view webview (embedded via Function.toString())
- * and unit-tested here in Node.
+ * The webview loads the plain-JS mirror (media/diagram-utils.js) via
+ * <script src>; parity is enforced by test/webviewUtilsParity.test.ts.
  */
 
 /** Selector for clickable class nodes in Mermaid classDiagram SVG output. */
@@ -42,10 +42,12 @@ export function extractClassIdName(idAttr: string): string | null {
     return match ? match[1] : null;
 }
 
+import { DIAGRAM_DRAG_THRESHOLD } from './constants';
+
 /**
  * True when the pointer moved far enough between down and up
  * to count as a pan drag rather than a click.
  */
-export function isDragMovement(downX: number, downY: number, upX: number, upY: number, threshold = 6): boolean {
+export function isDragMovement(downX: number, downY: number, upX: number, upY: number, threshold = DIAGRAM_DRAG_THRESHOLD): boolean {
     return Math.hypot(upX - downX, upY - downY) > threshold;
 }

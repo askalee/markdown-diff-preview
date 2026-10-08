@@ -1,8 +1,10 @@
 import * as vscode from 'vscode';
-import { exec } from 'child_process';
+import { execFile } from 'child_process';
 import { promisify } from 'util';
 import * as path from 'path';
 import { parseDiff } from './core/diffParser';
+import { GIT_MAX_BUFFER } from './core/constants';
+import { validateDiffBase, buildGitDiffArgs, buildUnstagedDiffArgs, classifyLsFilesError } from './core/gitDiffArgs';
 
 // Re-export types from core for backwards compatibility
 export { FileDiff, DiffHunk, DiffChange } from './core/types';
@@ -10,7 +12,7 @@ export { parseDiff } from './core/diffParser';
 
 import type { FileDiff } from './core/types';
 
-const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 
 export async function getGitDiff(document: vscode.TextDocument): Promise<FileDiff | null> {
     const workspaceFolder = vscode.workspace.getWorkspaceFolder(document.uri);
@@ -19,16 +21,21 @@ export async function getGitDiff(document: vscode.TextDocument): Promise<FileDif
     }
 
     const config = vscode.workspace.getConfiguration('markdownDiffPreview');
-    const diffBase = config.get<string>('diffBase', 'HEAD');
+    const diffBase = validateDiffBase(config.get<string>('diffBase', 'HEAD'));
     
     const relativePath = path.relative(workspaceFolder.uri.fsPath, document.uri.fsPath);
     const cwd = workspaceFolder.uri.fsPath;
 
     try {
-        // Check if file is tracked by git
-        const isTracked = await isFileTracked(cwd, relativePath);
-        
-        if (!isTracked) {
+        // Check if file is tracked by git. `null` means git itself failed
+        // (e.g. not a repo) — render without diff rather than mislabeling
+        // every line as a new-file addition.
+        const trackState = await isFileTracked(cwd, relativePath);
+        if (trackState === null) {
+            return null;
+        }
+
+        if (!trackState) {
             // New file - mark all lines as added
             const lineCount = document.lineCount;
             const addedLines = new Set<number>();
@@ -45,17 +52,19 @@ export async function getGitDiff(document: vscode.TextDocument): Promise<FileDif
             };
         }
 
-        // Get the diff output
-        const { stdout } = await execAsync(
-            `git diff ${diffBase} -- "${relativePath}"`,
-            { cwd, maxBuffer: 10 * 1024 * 1024 }
+        // Get the diff output (argv-based, no shell interpolation)
+        const { stdout } = await execFileAsync(
+            'git',
+            buildGitDiffArgs(diffBase, relativePath),
+            { cwd, maxBuffer: GIT_MAX_BUFFER }
         );
 
         if (!stdout.trim()) {
             // Also check for unstaged changes
-            const { stdout: unstagedDiff } = await execAsync(
-                `git diff -- "${relativePath}"`,
-                { cwd, maxBuffer: 10 * 1024 * 1024 }
+            const { stdout: unstagedDiff } = await execFileAsync(
+                'git',
+                buildUnstagedDiffArgs(relativePath),
+                { cwd, maxBuffer: GIT_MAX_BUFFER }
             );
             
             if (!unstagedDiff.trim()) {
@@ -79,12 +88,12 @@ export async function getGitDiff(document: vscode.TextDocument): Promise<FileDif
     }
 }
 
-async function isFileTracked(cwd: string, relativePath: string): Promise<boolean> {
+async function isFileTracked(cwd: string, relativePath: string): Promise<boolean | null> {
     try {
-        await execAsync(`git ls-files --error-unmatch "${relativePath}"`, { cwd });
+        await execFileAsync('git', ['ls-files', '--error-unmatch', '--', relativePath], { cwd });
         return true;
-    } catch {
-        return false;
+    } catch (error) {
+        return classifyLsFilesError(error);
     }
 }
 
@@ -95,7 +104,7 @@ export async function getGitBranch(document: vscode.TextDocument): Promise<strin
     }
 
     try {
-        const { stdout } = await execAsync('git branch --show-current', {
+        const { stdout } = await execFileAsync('git', ['branch', '--show-current'], {
             cwd: workspaceFolder.uri.fsPath
         });
         return stdout.trim();
@@ -113,7 +122,7 @@ export async function getGitStatus(document: vscode.TextDocument): Promise<strin
     const relativePath = path.relative(workspaceFolder.uri.fsPath, document.uri.fsPath);
 
     try {
-        const { stdout } = await execAsync(`git status --porcelain "${relativePath}"`, {
+        const { stdout } = await execFileAsync('git', ['status', '--porcelain', '--', relativePath], {
             cwd: workspaceFolder.uri.fsPath
         });
         

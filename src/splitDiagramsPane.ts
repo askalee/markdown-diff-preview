@@ -8,44 +8,22 @@
  */
 import type { ClassDiagramDetail } from './core/classDiagramDetail';
 import type { ParsedDiagram } from './core/extractDiagrams';
-import {
-    normalizeDiagramName,
-    isSameDiagramName,
-    extractClassIdName,
-    isDragMovement,
-    CLASS_NODE_SELECTOR,
-    ACTOR_HEADER_SELECTOR,
-    DIAGRAM_HIGHLIGHT_CLASS,
-} from './core/diagramHighlight';
-import {
-    shouldShowStickyHeader,
-    computeChipCenterOffset,
-    computeCenterPanX,
-    clampChipWidth,
-    STICKY_BAR_HEIGHT,
-    MIN_CHIP_WIDTH,
-    MAX_CHIP_WIDTH,
-} from './core/sequenceStickyHeader';
 
 export function buildDiagramsSplitPaneHtml(
     diagrams: ParsedDiagram[],
     detailLevel: ClassDiagramDetail,
     currentIndex: number,
 ): string {
-    const safeDiagramsJson = JSON.stringify(diagrams).replace(/</g, '\\u003c');
-    // Serialized with Function.toString(): TS compiles references to
-    // sibling module bindings as `exports.X`, which does not exist in the
-    // webview. Strip the prefix so the aliases below resolve instead.
-    const embedFn = (fn: (...args: never[]) => unknown): string =>
-        fn.toString().replace(/exports\./g, '');
-    const normalizeSrc = embedFn(normalizeDiagramName);
-    const isSameSrc = embedFn(isSameDiagramName);
-    const extractIdSrc = embedFn(extractClassIdName);
-    const isDragSrc = embedFn(isDragMovement);
-    const stickyShowSrc = embedFn(shouldShowStickyHeader);
-    const stickyOffsetSrc = embedFn(computeChipCenterOffset);
-    const stickyCenterSrc = embedFn(computeCenterPanX);
-    const stickyClampSrc = embedFn(clampChipWidth);
+    const safeDiagramsJson = JSON.stringify(diagrams)
+        .replace(/</g, '\\u003c')
+        .replace(/>/g, '\\u003e')
+        .replace(/&/g, '\\u0026')
+        .replace(/\u2028/g, '\\u2028')
+        .replace(/\u2029/g, '\\u2029');
+    // Client helpers come from media/diagram-utils.js (loaded via <script src>
+    // in the host page). They are intentionally NOT embedded with
+    // Function.toString(): compiled TS output is not a stable serialization
+    // format. Parity is enforced by test/webviewUtilsParity.test.ts.
     const safeIndex = diagrams.length === 0 ? 0 : Math.min(Math.max(0, currentIndex), diagrams.length - 1);
 
     return `
@@ -103,23 +81,20 @@ export function buildDiagramsSplitPaneHtml(
         const splitClassDetail = '${detailLevel}';
         const splitRenderedSvgs = {};
         const splitViewStates = {};
-        const splitNormalizeDiagramName = ${normalizeSrc};
-        const splitIsSameDiagramName = ${isSameSrc};
-        const splitExtractClassIdName = ${extractIdSrc};
-        const splitIsDragMovement = ${isDragSrc};
-        const SPLIT_CLASS_NODE_SELECTOR = '${CLASS_NODE_SELECTOR}';
-        const SPLIT_ACTOR_HEADER_SELECTOR = '${ACTOR_HEADER_SELECTOR}';
-        const SPLIT_HIGHLIGHT_CLASS = '${DIAGRAM_HIGHLIGHT_CLASS}';
-        const SPLIT_STICKY_BAR_HEIGHT = ${STICKY_BAR_HEIGHT};
-        const splitShouldShowStickyHeader = ${stickyShowSrc};
-        const splitComputeChipCenterOffset = ${stickyOffsetSrc};
-        const splitComputeCenterPanX = ${stickyCenterSrc};
-        const splitClampChipWidth = ${stickyClampSrc};
-        // Closure aliases: the embedded bodies above were serialized with
-        // Function.toString() and still reference their original sibling
-        // names (e.g. isSameDiagramName calls normalizeDiagramName,
-        // shouldShowStickyHeader defaults to STICKY_BAR_HEIGHT). Without
-        // these aliases the webview throws ReferenceError on first use.
+        const splitNormalizeDiagramName = window.DiagramUtils.normalizeDiagramName;
+        const splitIsSameDiagramName = window.DiagramUtils.isSameDiagramName;
+        const splitExtractClassIdName = window.DiagramUtils.extractClassIdName;
+        const splitIsDragMovement = window.DiagramUtils.isDragMovement;
+        const SPLIT_CLASS_NODE_SELECTOR = window.DiagramUtils.CLASS_NODE_SELECTOR;
+        const SPLIT_ACTOR_HEADER_SELECTOR = window.DiagramUtils.ACTOR_HEADER_SELECTOR;
+        const SPLIT_HIGHLIGHT_CLASS = window.DiagramUtils.DIAGRAM_HIGHLIGHT_CLASS;
+        const SPLIT_STICKY_BAR_HEIGHT = window.DiagramUtils.STICKY_BAR_HEIGHT;
+        const splitShouldShowStickyHeader = window.DiagramUtils.shouldShowStickyHeader;
+        const splitComputeChipCenterOffset = window.DiagramUtils.computeChipCenterOffset;
+        const splitComputeCenterPanX = window.DiagramUtils.computeCenterPanX;
+        const splitClampChipWidth = window.DiagramUtils.clampChipWidth;
+        // Aliases for helper bodies that reference their original sibling
+        // names (e.g. isSameDiagramName calls normalizeDiagramName).
         const normalizeDiagramName = splitNormalizeDiagramName;
         const isSameDiagramName = splitIsSameDiagramName;
         const extractClassIdName = splitExtractClassIdName;
@@ -128,9 +103,9 @@ export function buildDiagramsSplitPaneHtml(
         const computeChipCenterOffset = splitComputeChipCenterOffset;
         const computeCenterPanX = splitComputeCenterPanX;
         const clampChipWidth = splitClampChipWidth;
-        const STICKY_BAR_HEIGHT = ${STICKY_BAR_HEIGHT};
-        const MIN_CHIP_WIDTH = ${MIN_CHIP_WIDTH};
-        const MAX_CHIP_WIDTH = ${MAX_CHIP_WIDTH};
+        const STICKY_BAR_HEIGHT = window.DiagramUtils.STICKY_BAR_HEIGHT;
+        const MIN_CHIP_WIDTH = window.DiagramUtils.MIN_CHIP_WIDTH;
+        const MAX_CHIP_WIDTH = window.DiagramUtils.MAX_CHIP_WIDTH;
         let splitSelectedName = null;
         let splitSelectedNormalized = null;
         let splitStickyLanes = [];

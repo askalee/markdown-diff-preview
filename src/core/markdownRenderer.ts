@@ -3,13 +3,12 @@
  * Can be used both in the extension and standalone scripts.
  */
 
-import { FileDiff, CommentsData, Comment } from './types';
-import { 
-    parseCommentsData, 
-    extractCommentMarkersByLine, 
-    getCommentsForLine,
-    getCommentStatus 
+import { FileDiff, CommentsData } from './types';
+import {
+    parseCommentsData,
+    extractCommentMarkersByLine,
 } from './commentParser';
+import { createCommentRenderer } from './commentHtml';
 import { computeIntraLineDiff, restoreWordDiffPlaceholders } from './intraLineDiff';
 import {
     stashInlineCode,
@@ -18,6 +17,7 @@ import {
     restoreMathPlaceholders,
     renderDisplayBlock
 } from './math';
+import { escapeHtml } from './html';
 
 export function extractMermaidTitle(code: string, index: number): string {
     const trimmed = code.trim();
@@ -114,7 +114,7 @@ export async function renderMarkdownWithDiff(
     }
 
     let html = '';
-    const commentThreadsHtml: string[] = [];
+    const commentRenderer = createCommentRenderer(comments, commentMarkers);
     let inCodeBlock = false;
     let codeBlockContent = '';
     let codeBlockLang = '';
@@ -125,214 +125,6 @@ export async function renderMarkdownWithDiff(
     let inTable = false;
     let tableRows: { line: string; lineNumber: number }[] = [];
     let tableStartLine = 0;
-
-    const escapeHtml = (text: string): string => {
-        return text
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;')
-            .replace(/'/g, '&#039;');
-    };
-
-    /**
-     * Render comment badge for a comment
-     */
-    const renderCommentBadge = (comment: Comment): string => {
-        const status = getCommentStatus(comment);
-        const statusClass = `comment-status-${status}`;
-        return `<span class="comment-badge ${statusClass}" data-comment-id="${comment.id}" data-comment-line="${comment.target.line}" onclick="toggleCommentThread(${comment.id}); event.stopPropagation();">[${comment.id}]</span>`;
-    };
-
-    /**
-     * Render comment thread panel
-     */
-    const renderCommentThread = (comment: Comment): string => {
-        const threadItems = comment.thread.map(item => {
-            const authorClass = item.author === 'ai' ? 'comment-author-ai' : 'comment-author-user';
-            const timestamp = new Date(item.timestamp).toLocaleString();
-            const content = escapeHtml(item.content.trim());
-            // Only show author label for AI comments; don't show "You" for user comments
-            const authorLabel = item.author === 'ai' ? 'AI' : '';
-            return `
-                <div class="comment-thread-item ${authorClass}">
-                    <div class="comment-thread-header">
-                        ${authorLabel ? `<span class="comment-author">${authorLabel}</span>` : ''}
-                        <span class="comment-timestamp">${timestamp}</span>
-                    </div>
-                    <div class="comment-thread-content">${content}</div>
-                </div>
-            `;
-        }).join('');
-
-        let planHtml = '';
-        if (comment.plan) {
-            const planContent = escapeHtml(comment.plan.content.trim());
-            planHtml = `
-                <div class="comment-plan">
-                    <h4 class="comment-section-title">Plan</h4>
-                    <div class="comment-editable" contenteditable="true" data-comment-id="${comment.id}" data-type="plan">${planContent}</div>
-                    <div class="comment-status-badge status-${comment.plan.status}">${comment.plan.status}</div>
-                </div>
-            `;
-        }
-
-        let responseHtml = '';
-        if (comment.response) {
-            const responseContent = escapeHtml(comment.response.content.trim());
-            responseHtml = `
-                <div class="comment-response">
-                    <h4 class="comment-section-title">Response</h4>
-                    <div class="comment-editable" contenteditable="true" data-comment-id="${comment.id}" data-type="response">${responseContent}</div>
-                    <div class="comment-status-badge status-${comment.response.status}">${comment.response.status}</div>
-                </div>
-            `;
-        }
-
-        return `
-            <div class="comment-thread" id="comment-thread-${comment.id}" data-comment-id="${comment.id}" data-comment-line="${comment.target.line}" style="display: none;">
-                <div class="comment-thread-header-bar">
-                    <span class="comment-thread-title">Comment ${comment.id}</span>
-                    <div class="comment-thread-controls">
-                        <div class="comment-thread-nav">
-                            <button class="comment-nav-btn" data-nav="prev" aria-label="Previous comment">←</button>
-                            <button class="comment-nav-btn" data-nav="next" aria-label="Next comment">→</button>
-                        </div>
-                        <button class="comment-close-btn" onclick="toggleCommentThread(${comment.id}); event.stopPropagation();" aria-label="Close">×</button>
-                    </div>
-                </div>
-                <div class="comment-thread-items">
-                    ${threadItems || '<div class="comment-thread-item">No comments yet</div>'}
-                </div>
-                ${planHtml}
-                ${responseHtml}
-            </div>
-        `;
-    };
-
-    /**
-     * Wrap content with comment highlights and badges
-     */
-    // Track which comments have been processed to avoid duplicates
-    const processedComments = new Set<number>();
-
-    const wrapWithComments = (content: string, lineNumber: number, isBlock: boolean = false): string => {
-        if (!comments) {
-            return content;
-        }
-
-        const lineComments = getCommentsForLine(lineNumber, comments, commentMarkers);
-        
-        if (lineComments.length === 0) {
-            return content;
-        }
-
-        // For block comments, add badges before the element
-        // Inline comments are handled in processInlineComments
-        const blockComments = lineComments.filter(c => c.target.type === 'block' && !processedComments.has(c.id));
-        
-        if (blockComments.length === 0) {
-            // Only inline comments - already handled in parseInline
-            return content;
-        }
-
-        // Mark as processed BEFORE generating badges to prevent duplicates
-        blockComments.forEach(c => processedComments.add(c.id));
-
-        // Generate badges HTML for block comments
-        const badges = blockComments.map(comment => {
-            if (!commentThreadsHtml.some(html => html.includes(`comment-thread-${comment.id}`))) {
-                commentThreadsHtml.push(renderCommentThread(comment));
-            }
-            return renderCommentBadge(comment);
-        }).join('');
-
-        // Determine comment status for highlighting
-        const hasPlan = lineComments.some(c => c.plan !== null);
-        const hasResponse = lineComments.some(c => c.response !== null);
-        const statusClass = hasResponse ? 'comment-has-response' : hasPlan ? 'comment-has-plan' : 'comment-active';
-
-        // For block elements, inject badge at the start
-        return `<span class="comment-highlight-block ${statusClass}">${badges}</span>${content}`;
-    };
-
-    /**
-     * Process inline comments in HTML - insert badges right after the commented text
-     */
-    const processInlineComments = (html: string, originalLine: string, lineNumber: number): string => {
-        if (!comments) {
-            return html;
-        }
-
-        const lineComments = getCommentsForLine(lineNumber, comments, commentMarkers);
-        const inlineComments = lineComments.filter(c => c.target.type === 'inline');
-        
-        if (inlineComments.length === 0) {
-            return html;
-        }
-
-        // Find comment markers in original line and their positions
-        const markers: Array<{ id: number; position: number; comment: Comment }> = [];
-        const markerRegex = /<!--comment:(\d+)-->/g;
-        let match;
-        
-        while ((match = markerRegex.exec(originalLine)) !== null) {
-            const commentId = parseInt(match[1], 10);
-            const comment = comments[commentId.toString()];
-            if (comment && comment.target.type === 'inline' && !processedComments.has(comment.id)) {
-                markers.push({
-                    id: commentId,
-                    position: match.index,
-                    comment
-                });
-            }
-        }
-
-        if (markers.length === 0) {
-            return html;
-        }
-
-        // Mark as processed and store threads
-        markers.forEach(({ comment }) => {
-            processedComments.add(comment.id);
-            if (!commentThreadsHtml.some(h => h.includes(`comment-thread-${comment.id}`))) {
-                commentThreadsHtml.push(renderCommentThread(comment));
-            }
-        });
-
-        // Find the target text in the HTML and insert badge after it
-        // We need to find the escaped version of the target text
-        let result = html;
-        markers.forEach(({ comment }) => {
-            if (comment.target.text) {
-                const escapedText = escapeHtml(comment.target.text);
-                // Try to find the text in the HTML (might be wrapped in spans)
-                const textIndex = result.indexOf(escapedText);
-                if (textIndex !== -1) {
-                    const badge = renderCommentBadge(comment);
-                    // Insert badge after the text
-                    const insertPos = textIndex + escapedText.length;
-                    result = result.slice(0, insertPos) + ' ' + badge + result.slice(insertPos);
-                } else {
-                    // If text not found, append badge at end
-                    const badge = renderCommentBadge(comment);
-                    result = result + ' ' + badge;
-                }
-            }
-        });
-
-        // Determine comment status for highlighting
-        const hasPlan = inlineComments.some(c => c.plan !== null);
-        const hasResponse = inlineComments.some(c => c.response !== null);
-        const statusClass = hasResponse ? 'comment-has-response' : hasPlan ? 'comment-has-plan' : 'comment-active';
-
-        // Wrap in highlight if we have comments
-        if (markers.length > 0 && !result.includes('comment-highlight')) {
-            result = `<span class="comment-highlight ${statusClass}">${result}</span>`;
-        }
-
-        return result;
-    };
 
     const applyCharFormatting = (text: string): string => {
         let result = text;
@@ -399,7 +191,7 @@ export async function renderMarkdownWithDiff(
         
         // Process inline comments if line number and original line provided
         if (lineNumber !== undefined && originalLine !== undefined) {
-            result = processInlineComments(result, originalLine, lineNumber);
+            result = commentRenderer.processInlineComments(result, originalLine, lineNumber);
         }
         
         // Restore word-diff placeholders
@@ -559,7 +351,7 @@ export async function renderMarkdownWithDiff(
         }
         
         // Apply comment wrapping first
-        let contentWithComments = wrapWithComments(content, lineNumber, isBlock);
+        const contentWithComments = commentRenderer.wrapWithComments(content, lineNumber);
         
         // Always add data-line for click-to-navigate, add diff styling if added
         if (isAdded) {
@@ -881,11 +673,6 @@ export async function renderMarkdownWithDiff(
             continue;
         }
 
-        // Check for removed content that should appear at the end of the file
-        if (i === lines.length - 1) {
-            // Will handle after processing the last line
-        }
-
         // Code blocks
         if (line.startsWith('```')) {
             if (!inCodeBlock) {
@@ -1039,31 +826,11 @@ export async function renderMarkdownWithDiff(
             const level = headerMatch[1].length;
             // Check if previous line was a block comment marker
             const prevLine = i > 0 ? lines[i - 1] : '';
-            const blockCommentMatch = prevLine.trim().match(/^<!--comment:(\d+)-->$/);
-            let headerContent = headerMatch[2].trim();
+            const headerContent = headerMatch[2].trim();
             const content = parseInline(headerContent, line, lineNumber);
             let headerHtml = `<h${level}>${content}</h${level}>`;
             // Apply block comment if previous line was a comment marker
-            // The comment marker is on the previous line, but the comment targets the current line (the heading)
-            if (blockCommentMatch) {
-                const commentId = parseInt(blockCommentMatch[1], 10);
-                const comment = comments?.[commentId.toString()];
-                if (comment && comment.target.type === 'block' && !processedComments.has(comment.id)) {
-                    // Mark as processed immediately to prevent duplicates
-                    processedComments.add(comment.id);
-                    // Store thread for later rendering
-                    if (!commentThreadsHtml.some(html => html.includes(`comment-thread-${comment.id}`))) {
-                        commentThreadsHtml.push(renderCommentThread(comment));
-                    }
-                    // Generate badge
-                    const badge = renderCommentBadge(comment);
-                    const hasPlan = comment.plan !== null;
-                    const hasResponse = comment.response !== null;
-                    const statusClass = hasResponse ? 'comment-has-response' : hasPlan ? 'comment-has-plan' : 'comment-active';
-                    // Inject badge before the heading
-                    headerHtml = `<span class="comment-highlight-block ${statusClass}">${badge}</span>${headerHtml}`;
-                }
-            }
+            headerHtml = `${commentRenderer.prefixBlockBadge(prevLine)}${headerHtml}`;
             html += wrapWithDiff(headerHtml, lineNumber, true);
             continue;
         }
@@ -1142,8 +909,9 @@ export async function renderMarkdownWithDiff(
     }
 
     // Append all comment threads at the end
-    if (commentThreadsHtml.length > 0) {
-        html += '<div class="comment-threads-container">' + commentThreadsHtml.join('') + '</div>';
+    const threadsHtml = commentRenderer.takeThreadsHtml();
+    if (threadsHtml.length > 0) {
+        html += '<div class="comment-threads-container">' + threadsHtml.join('') + '</div>';
     }
 
     return html || '<div class="empty-state"><div class="icon">📄</div><p>Empty document</p></div>';

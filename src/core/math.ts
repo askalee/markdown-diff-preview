@@ -8,6 +8,7 @@
  */
 
 import katex from 'katex';
+import { escapeHtml, escapeAttr } from './html';
 
 const MATH_PREFIX = '\x00MATH';
 const CODE_PREFIX = '\x00CODE';
@@ -19,19 +20,6 @@ export function mathPlaceholder(id: number): string {
 
 export function codePlaceholder(id: number): string {
     return `${CODE_PREFIX}${id}\x00`;
-}
-
-function escapeHtml(text: string): string {
-    return text
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#039;');
-}
-
-function escapeAttr(text: string): string {
-    return escapeHtml(text);
 }
 
 /**
@@ -82,7 +70,7 @@ function isWhitespace(ch: string | undefined): boolean {
  */
 export function stashInlineMath(text: string, mathStash: string[]): string {
     // Protect escaped dollars: `\$` is always literal.
-    const protected_text = text.replace(/\\\$/g, ESCAPED_DOLLAR);
+    const protectedText = text.replace(/\\\$/g, ESCAPED_DOLLAR);
 
     const stash = (tex: string, displayMode: boolean): string => {
         const id = mathStash.length;
@@ -92,16 +80,16 @@ export function stashInlineMath(text: string, mathStash: string[]): string {
 
     let result = '';
     let i = 0;
-    const n = protected_text.length;
+    const n = protectedText.length;
 
     while (i < n) {
-        const ch = protected_text[i];
+        const ch = protectedText[i];
 
         // Display `$$...$$` on a single line
-        if (ch === '$' && protected_text[i + 1] === '$') {
-            const close = protected_text.indexOf('$$', i + 2);
+        if (ch === '$' && protectedText[i + 1] === '$') {
+            const close = protectedText.indexOf('$$', i + 2);
             if (close !== -1) {
-                const tex = protected_text.slice(i + 2, close);
+                const tex = protectedText.slice(i + 2, close);
                 if (tex.trim().length > 0) {
                     result += stash(tex, true);
                     i = close + 2;
@@ -114,10 +102,10 @@ export function stashInlineMath(text: string, mathStash: string[]): string {
         }
 
         // Inline `\(...\)`
-        if (ch === '\\' && protected_text[i + 1] === '(') {
-            const close = protected_text.indexOf('\\)', i + 2);
+        if (ch === '\\' && protectedText[i + 1] === '(') {
+            const close = protectedText.indexOf('\\)', i + 2);
             if (close !== -1) {
-                const tex = protected_text.slice(i + 2, close);
+                const tex = protectedText.slice(i + 2, close);
                 if (tex.trim().length > 0) {
                     result += stash(tex, false);
                     i = close + 2;
@@ -131,18 +119,18 @@ export function stashInlineMath(text: string, mathStash: string[]): string {
 
         // Inline `$...$`
         if (ch === '$') {
-            const next = protected_text[i + 1];
+            const next = protectedText[i + 1];
             if (next !== undefined && !isWhitespace(next)) {
                 let j = i + 1;
                 let found = -1;
                 while (j < n) {
-                    if (protected_text[j] === '$' && protected_text[j + 1] !== '$') {
-                        const tex = protected_text.slice(i + 1, j);
+                    if (protectedText[j] === '$' && protectedText[j + 1] !== '$') {
+                        const tex = protectedText.slice(i + 1, j);
                         const trimmed = tex.trim();
-                        const after = protected_text[j + 1];
+                        const after = protectedText[j + 1];
                         if (
                             trimmed.length > 0 &&
-                            !isWhitespace(protected_text[j - 1]) &&
+                            !isWhitespace(protectedText[j - 1]) &&
                             !/\$/.test(tex) &&
                             !/^\d+(\.\d+)?$/.test(trimmed) &&
                             (after === undefined || !/\d/.test(after))
@@ -154,7 +142,7 @@ export function stashInlineMath(text: string, mathStash: string[]): string {
                     j += 1;
                 }
                 if (found !== -1) {
-                    result += stash(protected_text.slice(i + 1, found), false);
+                    result += stash(protectedText.slice(i + 1, found), false);
                     i = found + 1;
                     continue;
                 }

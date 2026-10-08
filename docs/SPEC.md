@@ -206,7 +206,7 @@ As a user, I want settings to adjust the diff base and display options, so the e
 
 ### AC
 
-- [ ] AC-01: `markdownDiffPreview.diffBase` (default `HEAD`): the git comparison base, e.g. `main`, `origin/main`; the header shows `vs <diffBase>`.
+- [ ] AC-01: `markdownDiffPreview.diffBase` (default `HEAD`): the git comparison base, e.g. `main`, `origin/main`; the header shows `vs <diffBase>`. Values containing characters outside `[A-Za-z0-9/._@{}^~:-]` (or longer than 256 chars) fall back to `HEAD` and never reach a shell.
 - [ ] AC-02: `markdownDiffPreview.showLineNumbers` (default `true`): whether added lines show line numbers.
 - [ ] AC-03: `markdownDiffPreview.highlightStyle` (default `both`, only `inline` / `gutter` / `both` allowed): how diff highlights are displayed.
 - [ ] AC-04: `markdownDiffPreview.enableWordDiff` (default `true`): whether word-level diff is enabled (see US-04).
